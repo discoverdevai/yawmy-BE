@@ -1,0 +1,567 @@
+{
+  "info": {
+    "name": "Nursery Management System (NMS) API",
+    "_postman_id": "9b1d2f3a-4d5e-4c1a-9d6f-1a2b3c4d5e6f",
+    "description": "Postman collection for the Nursery Management System backend (Spring Boot).\n\n**Base URL** is controlled by the `baseUrl` variable (default `http://localhost:8080`).\n\n**Two-layer SaaS model**\n- **Super Admin** (platform owner / DiscoverDev): provisions new nurseries and invites their first admin(s). Not attached to any nursery. The bootstrap account is a super admin.\n- **Admin** (nursery manager): scoped to a single nursery. Configures nursery setup, creates rooms, invites teachers/parents — and can also invite additional admins within their own nursery.\n- **Teacher / Parent**: invited by an admin of their nursery.\n\n**Auth model**\n- Access tokens (JWT) carry `sub`, `email`, and `role` and **do not expire**. Revocation happens server-side by setting `User.enabled = false` (`Admin / Users / Disable User`).\n- Refresh tokens exist for compatibility but are optional.\n- \"Logout\" is a frontend concern — discard the access token client-side. The backend `/api/auth/logout` only revokes refresh tokens.\n\n**End-to-end flow**\n1. `Auth / Login` as the bootstrap super admin → access token saved.\n2. `Super Admin / Create Nursery` → saves `{{nurseryId}}`.\n3. `Super Admin / Invite Admin` for that nursery → saves `{{inviteToken}}`.\n4. `Auth / Accept Invite` (the invited admin sets a password and is immediately logged in).\n5. The admin runs `Admin / Nursery / Update Nursery` → `Update Geofence` → `Admin / Rooms / Create Room` → `Admin / Invites / Create Invite` to onboard teachers and parents.\n\n**Bootstrap super admin (dev defaults from application.yml)**\n- email: `admin@nms.local`\n- password: `ChangeMe!123`\n\n**Roles**: `SUPER_ADMIN`, `ADMIN`, `TEACHER`, `PARENT`. **Locales**: `EN`, `AR`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{accessToken}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
+    { "key": "accessToken", "value": "", "type": "string" },
+    { "key": "refreshToken", "value": "", "type": "string" },
+    { "key": "inviteToken", "value": "", "type": "string" },
+    { "key": "passwordResetToken", "value": "", "type": "string" },
+    { "key": "userId", "value": "", "type": "string" },
+    { "key": "roomId", "value": "", "type": "string" },
+    { "key": "nurseryId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Super Admin",
+      "description": "Platform-level endpoints. Only accessible to users with role `SUPER_ADMIN` — the bootstrap account is one. Super admins are not attached to any nursery; they provision new nurseries and onboard their first admin(s).",
+      "item": [
+        {
+          "name": "Create Nursery",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/nurseries",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "super-admin", "nurseries"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sunshine Nursery\"\n}"
+            },
+            "description": "Provisions a new nursery (tenant). Body has just `name` (1–200 chars); the nursery starts with default timezone `Africa/Cairo` and geofence radius 100m. The first admin will fill in the rest via `Admin / Nursery / Update Nursery` after they accept their invite.\n\n**Response (201)** is the full nursery shape. The test script auto-saves the new id into `{{nurseryId}}`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.id) pm.collectionVariables.set('nurseryId', json.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List Nurseries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/nurseries",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "super-admin", "nurseries"]
+            },
+            "description": "Returns every nursery on the platform, ordered by name. Super-admin-only."
+          }
+        },
+        {
+          "name": "Get Nursery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "super-admin", "nurseries", "{{nurseryId}}"]
+            },
+            "description": "Fetch a single nursery by id. Returns 404 if not found."
+          }
+        },
+        {
+          "name": "Rename Nursery",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "super-admin", "nurseries", "{{nurseryId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sunshine Nursery (renamed)\"\n}"
+            },
+            "description": "Rename a nursery. Operational details (logo, hours, geofence) are owned by the nursery's admin via `Admin / Nursery / Update Nursery`."
+          }
+        },
+        {
+          "name": "Invite Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}/admin-invites",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "super-admin", "nurseries", "{{nurseryId}}", "admin-invites"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nour@sunshine.local\",\n  \"fullName\": \"Nour Owner\",\n  \"locale\": \"EN\",\n  \"phone\": \"+201000000001\"\n}"
+            },
+            "description": "Invite the first admin (or any additional admin) for the target nursery. Role is forced to `ADMIN`; the invited user is auto-attached to the nursery in the URL.\n\n**Body**\n- `email` (required, valid email, max 254)\n- `fullName` (required, max 200)\n- `locale` (optional) — `EN` or `AR`, defaults to `EN`.\n- `phone` (optional, max 32)\n\n**Response (201)** has the same shape as `Admin / Invites / Create Invite`. The test script saves `{{inviteToken}}` and `{{userId}}` so the chain into `Auth / Accept Invite` just works.\n\nReturns 404 if the nursery id is unknown, 409 if the email already exists in the system."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.token) pm.collectionVariables.set('inviteToken', json.token);",
+                  "  if (json.userId) pm.collectionVariables.set('userId', json.userId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@nms.local\",\n  \"password\": \"ChangeMe!123\"\n}"
+            },
+            "description": "Authenticate with email + password. Used by **all roles** (super admin, admin, teacher, parent). The role embedded in the returned JWT determines which endpoints the user can access.\n\nReturns:\n- `accessToken` — JWT, no expiry. Send as `Authorization: Bearer ...` on protected endpoints.\n- `refreshToken` — opaque, 14-day TTL. Optional under the current model.\n- `tokenType` — `Bearer`.\n- `expiresInSeconds` — informational only; access tokens do not expire on time.\n\nFails with 401 if the user is disabled or the credentials are wrong, and with a friendly message if the account exists but has not yet accepted its invite (no password set).\n\n**Bootstrap super admin (dev)**: `admin@nms.local` / `ChangeMe!123`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.accessToken) pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "  if (json.refreshToken) pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "refresh"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "description": "Exchange a refresh token for a new access/refresh token pair (rotation: the old refresh token is revoked).\n\nOptional under the current auth model — access tokens do not expire on time, so you typically only need refresh after `POST /api/auth/logout` or after an admin disables and re-enables the user."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.accessToken) pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "  if (json.refreshToken) pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "description": "Revokes the current user's refresh tokens. Requires a valid access token.\n\n**Note**: this does NOT invalidate the access token itself (JWT is stateless and never expires). For real revocation, use `Admin / Disable User` or have the frontend discard the token."
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "Returns the currently authenticated user's profile: `id`, `email`, `fullName`, `role`, `locale`. Useful for the frontend to render role-aware UI without decoding the JWT."
+          }
+        },
+        {
+          "name": "Accept Invite",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/accept-invite",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "accept-invite"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{inviteToken}}\",\n  \"password\": \"NewUserPass!123\"\n}"
+            },
+            "description": "Activate an invited user by setting their password. Marks the invite as used, sets `enabled = true`, and returns a fresh token pair so the new user is logged in immediately.\n\nFails with 401 if the invite is unknown, already used, or expired (default 48h)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.accessToken) pm.collectionVariables.set('accessToken', json.accessToken);",
+                  "  if (json.refreshToken) pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "forgot-password"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@nms.local\"\n}"
+            },
+            "description": "Initiates the password reset flow. Always returns 204 — even for unknown emails — to avoid email enumeration.\n\nIn dev, the generated token is logged to the server console (look for `Password reset token issued for ...`). Copy it into the `passwordResetToken` collection variable, then call `Auth / Reset Password`."
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "reset-password"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{passwordResetToken}}\",\n  \"newPassword\": \"NewStrongPass!123\"\n}"
+            },
+            "description": "Completes a password reset using the token issued by the forgot-password flow. On success, sets the new password and revokes all refresh tokens for that user (existing access tokens remain valid until the user is disabled — frontend should drop them).\n\nFails with 401 if the token is unknown, already used, or expired."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Nursery",
+          "description": "Endpoints for the admin to read and update their own nursery (name, logo, hours, geofence). Every admin is scoped to a single nursery via `User.nursery_id`; these endpoints implicitly target the caller's nursery.",
+          "item": [
+            {
+              "name": "Get Nursery",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/nursery",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "nursery"]
+                },
+                "description": "Returns the current admin's nursery: id, name, logo, timezone, opening hours, geofence center+radius. Useful as the first call after login to populate the admin dashboard header and settings."
+              }
+            },
+            {
+              "name": "Update Nursery",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/nursery",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "nursery"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Sunshine Nursery\",\n  \"logoUrl\": \"https://cdn.example.com/logo.png\",\n  \"timezone\": \"Africa/Cairo\",\n  \"hoursStart\": \"08:00:00\",\n  \"hoursEnd\": \"17:00:00\"\n}"
+                },
+                "description": "Partial update of nursery profile. Any field may be omitted; only provided fields are changed.\n\n`hoursStart` / `hoursEnd` are `LocalTime` (`HH:mm:ss`). End must be strictly after start (returns 400 otherwise).\n\nThe configured hours drive the **out-of-hours indicator** in chat (PRD §6.1)."
+              }
+            },
+            {
+              "name": "Update Geofence",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/nursery/geofence",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "nursery", "geofence"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"lat\": 30.0444,\n  \"lng\": 31.2357,\n  \"radiusM\": 100\n}"
+                },
+                "description": "Sets the nursery geofence center (lat/lng) and radius in metres (10–2000). Used by parent check-in to enable/disable the check-in button (PRD §6.1 attendance).\n\nDefaults from the PRD: radius 100m, +10m drift tolerance applied at check-in time."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rooms",
+          "description": "CRUD for rooms within the admin's nursery. Names must be unique among active (non-archived) rooms (case-insensitive). Soft-archive preserves history.",
+          "item": [
+            {
+              "name": "Create Room",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Room A\",\n  \"capacity\": 15\n}"
+                },
+                "description": "Create a room within the current admin's nursery.\n\n**Body**\n- `name` (required, max 100, unique among active rooms case-insensitive)\n- `capacity` (optional, min 1)\n\n**Response (201)** auto-saves the new room id into `{{roomId}}`.\n\nReturns 409 if a non-archived room with the same name already exists."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('roomId', json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Rooms",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms?includeArchived=false",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms"],
+                  "query": [
+                    { "key": "includeArchived", "value": "false", "description": "Set true to include soft-archived rooms" }
+                  ]
+                },
+                "description": "List rooms in the current nursery, ordered by name. Set `includeArchived=true` to include soft-archived rooms; defaults to active only."
+              }
+            },
+            {
+              "name": "Get Room",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms", "{{roomId}}"]
+                },
+                "description": "Fetch a single room by id. Returns 404 if the room does not exist or belongs to a different nursery (cross-tenant access is treated as not-found)."
+              }
+            },
+            {
+              "name": "Update Room",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms", "{{roomId}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Room A (renamed)\",\n  \"capacity\": 20\n}"
+                },
+                "description": "Partial update of an active room. Any field may be omitted.\n\nReturns 409 if:\n- the new name clashes with another active room, or\n- the room is archived (restore it first)."
+              }
+            },
+            {
+              "name": "Archive Room",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms", "{{roomId}}"]
+                },
+                "description": "Soft-archive the room (sets `archivedAt = now`). The row is preserved so historical references (children, daily logs, attendance) remain intact. Use **Restore Room** to bring it back."
+              }
+            },
+            {
+              "name": "Restore Room",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/restore",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms", "{{roomId}}", "restore"]
+                },
+                "description": "Un-archive a previously archived room (clears `archivedAt`). Fails with 409 if a different active room now uses the same name — rename the archived room first or rename the active one."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Invites",
+          "description": "Onboarding flow: admin creates an invite for a teacher or parent, then shares the returned one-time token with them so they can call `Auth / Accept Invite` to set a password.",
+          "item": [
+            {
+              "name": "Create Invite",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/invites",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "invites"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"teacher1@nms.local\",\n  \"fullName\": \"Teacher One\",\n  \"role\": \"TEACHER\",\n  \"locale\": \"EN\",\n  \"phone\": \"+201000000000\"\n}"
+                },
+                "description": "Creates a new user invite. Requires the caller to have role ADMIN. The invited user is auto-attached to the inviting admin's nursery.\n\n**Body**\n- `email` (required, valid email, max 254)\n- `fullName` (required, max 200)\n- `role` (required) — `ADMIN`, `TEACHER`, or `PARENT`. `SUPER_ADMIN` is rejected (400).\n- `locale` (optional) — `EN` or `AR`, defaults to `EN`.\n- `phone` (optional, max 32)\n\nAdmins may invite **other admins** within their own nursery (co-admins / owner+manager pattern). To onboard the *first* admin of a brand-new nursery, use `Super Admin / Invite Admin`.\n\n**Response (201)** contains the invited `userId` and a one-time `token` to share with the invitee for `POST /api/auth/accept-invite`. The test script auto-saves both into `{{userId}}` and `{{inviteToken}}`.\n\nReturns 409 if the email already exists."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.token) pm.collectionVariables.set('inviteToken', json.token);",
+                      "  if (json.userId) pm.collectionVariables.set('userId', json.userId);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Users",
+          "description": "Account control: enable/disable users without rotating credentials. Disabling is the canonical revocation mechanism for non-expiring access tokens.",
+          "item": [
+            {
+              "name": "Disable User",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/users/{{userId}}/disable",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "users", "{{userId}}", "disable"]
+                },
+                "description": "Disable a user account. Requires role ADMIN.\n\n**Effect**: sets `enabled = false` and revokes all of the user's refresh tokens. The next API call from that user with their existing access token will fail (401), since `JwtAuthFilter` checks `enabled` on every request.\n\nReturns 400 if you try to disable your own account."
+              }
+            },
+            {
+              "name": "Enable User",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/users/{{userId}}/enable",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "users", "{{userId}}", "enable"]
+                },
+                "description": "Re-enable a previously disabled user account. Requires role ADMIN.\n\nThe user must log in again to obtain a new token (their refresh tokens were revoked at disable time)."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

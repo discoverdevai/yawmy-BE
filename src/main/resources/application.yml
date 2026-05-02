@@ -1,0 +1,41 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: nursery-back-end
+
+  datasource:
+    url: jdbc:h2:mem:nmsdb;MODE=LEGACY;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+
+app:
+  jwt:
+    # 256-bit base64-encoded secret. Override in prod via APP_JWT_SECRET env var.
+    secret: "Y2hhbmdlLW1lLXRoaXMtaXMtYS1kZXYtb25seS1qd3Qtc2VjcmV0LWtleS0yNTY="
+    access-token-ttl-minutes: 30
+    refresh-token-ttl-days: 14
+  invite:
+    ttl-hours: 48
+  password-reset:
+    ttl-minutes: 60
+  bootstrap-admin:
+    email: admin@nms.local
+    password: ChangeMe!123
+    full-name: Root Admin
