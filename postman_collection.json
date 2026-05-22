@@ -29,7 +29,9 @@
     { "key": "logEntryId", "value": "", "type": "string" },
     { "key": "attendanceEventId", "value": "", "type": "string" },
     { "key": "incidentId", "value": "", "type": "string" },
-    { "key": "mediaId", "value": "", "type": "string" }
+    { "key": "mediaId", "value": "", "type": "string" },
+    { "key": "announcementId", "value": "", "type": "string" },
+    { "key": "eventId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -1359,6 +1361,214 @@
               }
             }
           ]
+        },
+        {
+          "name": "Announcements",
+          "description": "Admin can post nursery-wide or room-scoped announcements with text + links + attached media (PRD §6.3). Attachments reuse existing MediaItem rows — upload via `Admin / Media / Upload For Child` first, then pass the `id`s in `attachmentMediaIds`. Returns `seenCount` per announcement; full per-user breakdown via `/seen-by`.",
+          "item": [
+            {
+              "name": "Create",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/announcements",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "announcements"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scope\": \"NURSERY\",\n  \"title\": \"Half-day Wednesday\",\n  \"body\": \"Pick-up at 12:00 this Wednesday for staff training.\",\n  \"links\": [\"https://sunshine.local/calendar\"],\n  \"attachmentMediaIds\": []\n}"
+                },
+                "description": "Set `scope: \"ROOM\"` and provide `roomId` for room-targeted announcements. Saves the new id into `{{announcementId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('announcementId', json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/announcements/{{announcementId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "announcements", "{{announcementId}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"body\": \"Pick-up at 11:30 this Wednesday for staff training (time changed).\"\n}"
+                },
+                "description": "Partial update. `attachmentMediaIds` replaces the full attachment list when provided (pass empty array to remove all)."
+              }
+            },
+            {
+              "name": "Delete",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/announcements/{{announcementId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "announcements", "{{announcementId}}"]
+                },
+                "description": "Hard delete (no retention rule like incidents). Cascades the announcement_links and announcement_attachments rows but does NOT delete the underlying media."
+              }
+            },
+            {
+              "name": "List",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/announcements",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "announcements"],
+                  "query": [
+                    { "key": "roomId", "value": "{{roomId}}", "disabled": true, "description": "Optional — filter to a single room" }
+                  ]
+                },
+                "description": "All announcements in the nursery, newest first. PRD §6.3 'Filter announcements by room' satisfied by the optional roomId query param."
+              }
+            },
+            {
+              "name": "Get",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/announcements/{{announcementId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "announcements", "{{announcementId}}"]
+                }
+              }
+            },
+            {
+              "name": "Seen-By",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/announcements/{{announcementId}}/seen-by",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "announcements", "{{announcementId}}", "seen-by"]
+                },
+                "description": "Per-user breakdown of who has opened this announcement (PRD §6.3 'Seen-by count per announcement'). One row per user that's marked it seen, with `seenAt` timestamp. The list endpoint already returns just the `seenCount` for quick sorting."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Events",
+          "description": "Events are admin-authored only (PRD §6.3). Types: `ONE_TIME`, `RECURRING` (requires `recurrenceRule` RFC5545 RRULE), `HOLIDAY`, `PARENT_TEACHER_MEETING`. Server stores recurrence verbatim — the mobile/web client expands occurrences for calendar rendering.",
+          "item": [
+            {
+              "name": "Create",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/events",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "events"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scope\": \"NURSERY\",\n  \"eventType\": \"ONE_TIME\",\n  \"title\": \"Sports Day\",\n  \"description\": \"Annual sports day at the back garden.\",\n  \"location\": \"Sunshine Nursery — back garden\",\n  \"startsAt\": \"2026-06-15T09:00:00Z\",\n  \"endsAt\": \"2026-06-15T12:00:00Z\"\n}"
+                },
+                "description": "Saves new id into `{{eventId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('eventId', json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/events/{{eventId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "events", "{{eventId}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"location\": \"Sunshine Nursery — main hall (moved indoors)\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/events/{{eventId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "events", "{{eventId}}"]
+                }
+              }
+            },
+            {
+              "name": "List",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/events?upcoming=false",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "events"],
+                  "query": [
+                    { "key": "upcoming", "value": "false", "description": "Set true to only return events with `startsAt >= now`" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/events/{{eventId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "events", "{{eventId}}"]
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -1798,6 +2008,89 @@
               }
             }
           ]
+        },
+        {
+          "name": "Announcements",
+          "description": "Teachers can only post ROOM-scoped announcements (PRD §6.2 'Post room-level announcements — their room only'). Edit/delete restricted to own posts. Events are admin-only and not exposed here.",
+          "item": [
+            {
+              "name": "Create",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/announcements",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "announcements"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scope\": \"ROOM\",\n  \"roomId\": \"{{roomId}}\",\n  \"title\": \"Bring a hat tomorrow\",\n  \"body\": \"We'll be outside most of the day, please send a hat with your child.\",\n  \"links\": [],\n  \"attachmentMediaIds\": []\n}"
+                },
+                "description": "400 if `scope != ROOM` or `roomId` missing. 404 if teacher isn't assigned to that room. Saves the new id into `{{announcementId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('announcementId', json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/announcements/{{announcementId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "announcements", "{{announcementId}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"body\": \"Updated note for tomorrow.\"\n}"
+                },
+                "description": "403 if not the author."
+              }
+            },
+            {
+              "name": "Delete",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/announcements/{{announcementId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "announcements", "{{announcementId}}"]
+                },
+                "description": "403 if not the author."
+              }
+            },
+            {
+              "name": "List For Room",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/announcements",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "rooms", "{{roomId}}", "announcements"]
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -2003,6 +2296,86 @@
               ]
             },
             "description": "Parent's per-child gallery. Aggregates **two** sources, both filtered to non-deleted items:\n- Child-scoped media (uploaded directly to this child)\n- Room-scoped media for the child's current room (so a 'Sunflower room party' upload shows up for every Sunflower kid's parent)\n\nResults are merged and sorted newest-first. View-only — parents cannot delete (PRD §6.1). 404 if the child is unenrolled or the parent isn't linked."
+          }
+        },
+        {
+          "name": "Announcements / List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/announcements",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "announcements"]
+            },
+            "description": "Returns all announcements visible to this parent: nursery-wide ones AND any room-scoped ones for rooms their enrolled children currently belong to. Each row carries `seenByMe` + `seenByMeAt` (no auto-mark; that happens only on `GET /{id}`)."
+          }
+        },
+        {
+          "name": "Announcements / Get + Mark Seen",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/announcements/{{announcementId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "announcements", "{{announcementId}}"]
+            },
+            "description": "Full detail with attachments resolved. **First call** for this announcement+parent pair inserts an `announcement_seen` row (so admin's `seenCount` ticks up). Subsequent calls are no-ops."
+          }
+        },
+        {
+          "name": "Events / List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/events?upcoming=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "events"],
+              "query": [
+                { "key": "upcoming", "value": "false", "description": "Set true to filter to `startsAt >= now`" }
+              ]
+            },
+            "description": "Nursery-wide + room-targeted events for the parent's children's rooms. Each row has `savedByMe` for the Figma 'saved' chip."
+          }
+        },
+        {
+          "name": "Events / Save",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/events/{{eventId}}/save",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "events", "{{eventId}}", "save"]
+            },
+            "description": "Idempotent — second call is a no-op (savedAt remains the original timestamp)."
+          }
+        },
+        {
+          "name": "Events / Unsave",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/events/{{eventId}}/save",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "events", "{{eventId}}", "save"]
+            }
+          }
+        },
+        {
+          "name": "Events / Saved Tab",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/events/saved",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "events", "saved"]
+            },
+            "description": "Backs the Figma 'Saved' events tab in the parent app."
           }
         }
       ]
