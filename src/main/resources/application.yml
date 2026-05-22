@@ -5,6 +5,11 @@ spring:
   application:
     name: nursery-back-end
 
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
   datasource:
     url: jdbc:h2:mem:nmsdb;MODE=LEGACY;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver
@@ -39,3 +44,6 @@ app:
     email: admin@nms.local
     password: ChangeMe!123
     full-name: Root Admin
+  media:
+    local:
+      root: ./uploads

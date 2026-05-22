@@ -1,0 +1,140 @@
+package com.discoverdev.nms.incident;
+
+import com.discoverdev.nms.child.Child;
+import com.discoverdev.nms.child.ChildRepository;
+import com.discoverdev.nms.child.GuardianLink;
+import com.discoverdev.nms.child.GuardianLinkRepository;
+import com.discoverdev.nms.incident.dto.AcknowledgmentRow;
+import com.discoverdev.nms.incident.dto.CreateIncidentRequest;
+import com.discoverdev.nms.incident.dto.IncidentResponse;
+import com.discoverdev.nms.incident.dto.UpdateIncidentRequest;
+import com.discoverdev.nms.tenant.TenantContext;
+import com.discoverdev.nms.user.User;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+@Service
+public class AdminIncidentService {
+
+    private final IncidentReportRepository incidentRepository;
+    private final IncidentAcknowledgmentRepository ackRepository;
+    private final ChildRepository childRepository;
+    private final GuardianLinkRepository guardianLinkRepository;
+    private final ApplicationEventPublisher events;
+
+    public AdminIncidentService(
+        IncidentReportRepository incidentRepository,
+        IncidentAcknowledgmentRepository ackRepository,
+        ChildRepository childRepository,
+        GuardianLinkRepository guardianLinkRepository,
+        ApplicationEventPublisher events
+    ) {
+        this.incidentRepository = incidentRepository;
+        this.ackRepository = ackRepository;
+        this.childRepository = childRepository;
+        this.guardianLinkRepository = guardianLinkRepository;
+        this.events = events;
+    }
+
+    @Transactional
+    public IncidentResponse create(UUID childId, CreateIncidentRequest req, User author) {
+        UUID nurseryId = TenantContext.currentNurseryId();
+        Child child = childRepository.findByIdAndNurseryId(childId, nurseryId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Child not found"));
+        IncidentReport saved = incidentRepository.save(IncidentReport.builder()
+            .nursery(child.getNursery())
+            .child(child)
+            .room(child.getRoom())
+            .author(author)
+            .incidentAt(req.incidentAt())
+            .description(req.description())
+            .actionTaken(req.actionTaken())
+            .injuryArea(req.injuryArea())
+            .build());
+        events.publishEvent(new IncidentReportedEvent(
+            saved.getNursery().getId(), child.getId(), saved.getId(),
+            author.getId(), saved.getIncidentAt()
+        ));
+        return toResponse(saved);
+    }
+
+    @Transactional
+    public IncidentResponse update(UUID incidentId, UpdateIncidentRequest req) {
+        IncidentReport incident = loadOwned(incidentId);
+        if (req.incidentAt() != null) incident.setIncidentAt(req.incidentAt());
+        if (req.description() != null) incident.setDescription(req.description());
+        if (req.actionTaken() != null) incident.setActionTaken(req.actionTaken());
+        if (req.injuryArea() != null) incident.setInjuryArea(req.injuryArea());
+        return toResponse(incidentRepository.save(incident));
+    }
+
+    @Transactional(readOnly = true)
+    public IncidentResponse get(UUID incidentId) {
+        return toResponse(loadOwned(incidentId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<IncidentResponse> listNurseryWide() {
+        UUID nurseryId = TenantContext.currentNurseryId();
+        return incidentRepository.findByNurseryIdOrderByIncidentAtDesc(nurseryId).stream()
+            .map(this::toResponse)
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<IncidentResponse> listForChild(UUID childId) {
+        UUID nurseryId = TenantContext.currentNurseryId();
+        Child child = childRepository.findByIdAndNurseryId(childId, nurseryId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Child not found"));
+        return incidentRepository.findByChildIdOrderByIncidentAtDesc(child.getId()).stream()
+            .map(this::toResponse)
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AcknowledgmentRow> listAcknowledgments(UUID incidentId) {
+        IncidentReport incident = loadOwned(incidentId);
+        return buildAckRows(incident);
+    }
+
+    IncidentReport loadOwned(UUID incidentId) {
+        UUID nurseryId = TenantContext.currentNurseryId();
+        return incidentRepository.findByIdAndNurseryId(incidentId, nurseryId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Incident not found"));
+    }
+
+    private IncidentResponse toResponse(IncidentReport r) {
+        List<GuardianLink> links = guardianLinkRepository.findByChildIdOrderByCreatedAtAsc(r.getChild().getId());
+        long total = links.size();
+        long acked = ackRepository.countByIncidentId(r.getId());
+        return IncidentResponse.of(r, total, acked);
+    }
+
+    private List<AcknowledgmentRow> buildAckRows(IncidentReport incident) {
+        List<GuardianLink> links = guardianLinkRepository.findByChildIdOrderByCreatedAtAsc(incident.getChild().getId());
+        List<IncidentAcknowledgment> acks = ackRepository.findByIncidentId(incident.getId());
+        Map<UUID, Instant> ackedByGuardian = new HashMap<>();
+        for (IncidentAcknowledgment a : acks) {
+            ackedByGuardian.put(a.getGuardian().getId(), a.getAcknowledgedAt());
+        }
+        List<AcknowledgmentRow> rows = new ArrayList<>();
+        for (GuardianLink link : links) {
+            User g = link.getGuardian();
+            Instant when = ackedByGuardian.get(g.getId());
+            rows.add(new AcknowledgmentRow(
+                g.getId(), g.getFullName(), g.getEmail(),
+                link.getRelationship(), when != null, when
+            ));
+        }
+        return rows;
+    }
+}

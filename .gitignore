@@ -21,3 +21,5 @@ application-local.properties
 Thumbs.db
 
 .claude/
+.prd_extract/
+uploads/

@@ -19,7 +19,16 @@
     { "key": "passwordResetToken", "value": "", "type": "string" },
     { "key": "userId", "value": "", "type": "string" },
     { "key": "roomId", "value": "", "type": "string" },
-    { "key": "nurseryId", "value": "", "type": "string" }
+    { "key": "nurseryId", "value": "", "type": "string" },
+    { "key": "teacherId", "value": "", "type": "string" },
+    { "key": "childId", "value": "", "type": "string" },
+    { "key": "guardianId", "value": "", "type": "string" },
+    { "key": "pickupId", "value": "", "type": "string" },
+    { "key": "emergencyContactId", "value": "", "type": "string" },
+    { "key": "dailyLogId", "value": "", "type": "string" },
+    { "key": "logEntryId", "value": "", "type": "string" },
+    { "key": "attendanceEventId", "value": "", "type": "string" },
+    { "key": "incidentId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -490,6 +499,453 @@
           ]
         },
         {
+          "name": "Teachers",
+          "description": "Assign teachers to rooms. A teacher can be assigned to multiple rooms; a room can have multiple teachers. The teacher must already exist in this nursery (invited via `Admin / Invites / Create Invite` with role `TEACHER`).",
+          "item": [
+            {
+              "name": "Assign Teacher to Room",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/teachers/{{teacherId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms", "{{roomId}}", "teachers", "{{teacherId}}"]
+                },
+                "description": "Attach an existing TEACHER user to a room. Returns 201, 404 if room/teacher not in this nursery, 400 if the user is not a teacher, 409 if already assigned or the room is archived."
+              }
+            },
+            {
+              "name": "List Teachers in Room",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/teachers",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms", "{{roomId}}", "teachers"]
+                },
+                "description": "List teachers assigned to a specific room, ordered by assignment date."
+              }
+            },
+            {
+              "name": "List Rooms for Teacher",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/teachers/{{teacherId}}/rooms",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "teachers", "{{teacherId}}", "rooms"]
+                },
+                "description": "List rooms a specific teacher is assigned to."
+              }
+            },
+            {
+              "name": "Unassign Teacher",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/teachers/{{teacherId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms", "{{roomId}}", "teachers", "{{teacherId}}"]
+                },
+                "description": "Remove a teacher from a room. Returns 204 on success, 404 if no such assignment."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Children",
+          "description": "Enrollment: create child profiles, assign to rooms, manage guardians, authorized pickups, and emergency contacts. Photo upload is per-child. Unenroll soft-revokes the child and removes them from parent self-service queries; the row + linked data are retained for history.",
+          "item": [
+            {
+              "name": "Create Child",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fullName\": \"Yara Ahmed\",\n  \"dob\": \"2022-03-15\",\n  \"roomId\": \"{{roomId}}\",\n  \"allergies\": \"Peanuts\",\n  \"medicalNotes\": \"Mild asthma — inhaler in bag\",\n  \"immunizations\": \"MMR (2023-04), DTaP (2023-09)\"\n}"
+                },
+                "description": "Create a child profile in the admin's nursery.\n\n**Body**\n- `fullName` (required, max 200)\n- `dob` (required, ISO date, must be in the past)\n- `roomId` (optional) — must reference an active room in this nursery\n- `allergies`, `medicalNotes`, `immunizations` (optional free text, max 2000 each)\n\n**Response (201)** auto-saves the new child id into `{{childId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('childId', json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List Children",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children?includeUnenrolled=false",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children"],
+                  "query": [
+                    { "key": "includeUnenrolled", "value": "false", "description": "Set true to include unenrolled children" },
+                    { "key": "roomId", "value": "{{roomId}}", "disabled": true, "description": "Filter by room" }
+                  ]
+                },
+                "description": "List children in the current nursery, ordered by full name. Optional query params: `roomId` (filter by room), `includeUnenrolled` (default false)."
+              }
+            },
+            {
+              "name": "Get Child",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}"]
+                },
+                "description": "Fetch a single child by id. Returns 404 if the child does not exist or belongs to another nursery."
+              }
+            },
+            {
+              "name": "Update Child",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fullName\": \"Yara A. Ahmed\",\n  \"allergies\": \"Peanuts, eggs\",\n  \"medicalNotes\": \"Mild asthma — inhaler in bag (refilled 2024-01)\"\n}"
+                },
+                "description": "Partial update of profile fields. Room assignment goes through **Reassign Room**; enrollment status goes through **Unenroll** / **Restore**."
+              }
+            },
+            {
+              "name": "Reassign Room",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/room",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "room"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"roomId\": \"{{roomId}}\"\n}"
+                },
+                "description": "Move a child to a different room. Pass `roomId: null` to detach. Target room must be active in this nursery."
+              }
+            },
+            {
+              "name": "Unenroll Child",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/unenroll",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "unenroll"]
+                },
+                "description": "Set `enrollmentStatus = UNENROLLED` and record `unenrolledAt`. Hides the child from parent self-service immediately (PRD §6.3). Guardian links remain in DB for historical reference but no longer expose data."
+              }
+            },
+            {
+              "name": "Restore Child",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/restore",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "restore"]
+                },
+                "description": "Re-enroll a previously unenrolled child (clears `unenrolledAt`). Parent access via existing guardian links becomes visible again."
+              }
+            },
+            {
+              "name": "Upload Photo",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/photo",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "photo"]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "file", "type": "file", "src": [], "description": "JPEG/PNG/WEBP, max 5 MB" }
+                  ]
+                },
+                "description": "Upload a child's profile photo (multipart). Accepts `image/jpeg`, `image/png`, or `image/webp`, max 5 MB. Replaces any existing photo.\n\n**Storage** is local disk for dev (`./uploads/children/{id}.{ext}` under the configured root). The returned child shape has `photoUrl` set to `/api/files/children/{id}/photo` — call that with an auth header to download bytes.\n\nErrors: 400 (no file), 413 (>5 MB), 415 (wrong content type)."
+              }
+            },
+            {
+              "name": "Delete Photo",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/photo",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "photo"]
+                },
+                "description": "Remove the child's profile photo from disk and clear `photoKey`. Returns 204 even if no photo was set."
+              }
+            },
+            {
+              "name": "Download Photo",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/files/children/{{childId}}/photo",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "files", "children", "{{childId}}", "photo"]
+                },
+                "description": "Stream the child's photo. Requires auth. Access: ADMIN/TEACHER in the same nursery, OR a PARENT with an active guardian link to this child. Anyone else gets 404."
+              }
+            },
+            {
+              "name": "Guardians / Link or Invite",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/guardians",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "guardians"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"yara.parent@example.com\",\n  \"fullName\": \"Mona Hassan\",\n  \"relationship\": \"Mother\",\n  \"isPrimary\": true,\n  \"locale\": \"EN\",\n  \"phone\": \"+201000000010\"\n}"
+                },
+                "description": "Single-call guardian onboarding (option A).\n\n- If the email is **new**: creates a PARENT user (disabled), attaches to this nursery, issues an invite token (48h), and links them to the child. Response has `newInvite: true` and `inviteToken` set — share with the parent so they can call `Auth / Accept Invite`. The test script saves `{{inviteToken}}` and `{{guardianId}}`.\n- If a PARENT user with that email **already exists** in this nursery: links them directly. Response has `newInvite: false` and null invite fields.\n\n**Body**\n- `email` (required)\n- `fullName` (required when inviting; ignored when linking existing)\n- `relationship` (required, free text — \"Mother\", \"Father\", \"Grandmother\", etc.)\n- `isPrimary` (optional, default false)\n- `locale`, `phone` (optional, for invite flow)\n\n**Errors**: 409 if email belongs to another nursery, 409 if email is registered with a non-parent role, 409 if guardian already linked to this child."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.guardianId) pm.collectionVariables.set('guardianId', json.guardianId);",
+                      "  if (json.inviteToken) pm.collectionVariables.set('inviteToken', json.inviteToken);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Guardians / List for Child",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/guardians",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "guardians"]
+                },
+                "description": "List all guardians linked to a child (ordered by link creation time)."
+              }
+            },
+            {
+              "name": "Guardians / Unlink",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/guardians/{{guardianId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "guardians", "{{guardianId}}"]
+                },
+                "description": "Remove the guardian-child link. The parent user account is NOT deleted."
+              }
+            },
+            {
+              "name": "Pickups / Create",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/pickups",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "pickups"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fullName\": \"Auntie Sara\",\n  \"relationship\": \"Aunt\",\n  \"phone\": \"+201000000020\"\n}"
+                },
+                "description": "Add an authorized pickup contact. The test script saves the new id into `{{pickupId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('pickupId', json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Pickups / List",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/pickups",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "pickups"]
+                }
+              }
+            },
+            {
+              "name": "Pickups / Update",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/pickups/{{pickupId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "pickups", "{{pickupId}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fullName\": \"Auntie Sara\",\n  \"relationship\": \"Aunt\",\n  \"phone\": \"+201000000021\"\n}"
+                },
+                "description": "Full replace of pickup details (all fields required)."
+              }
+            },
+            {
+              "name": "Pickups / Delete",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/pickups/{{pickupId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "pickups", "{{pickupId}}"]
+                }
+              }
+            },
+            {
+              "name": "Emergency Contacts / Create",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/emergency-contacts",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "emergency-contacts"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fullName\": \"Dr. Mahmoud\",\n  \"relationship\": \"Pediatrician\",\n  \"phone\": \"+201000000030\"\n}"
+                },
+                "description": "Add an emergency contact (distinct from authorized pickups). The test script saves the new id into `{{emergencyContactId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('emergencyContactId', json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Emergency Contacts / List",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/emergency-contacts",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "emergency-contacts"]
+                }
+              }
+            },
+            {
+              "name": "Emergency Contacts / Update",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/emergency-contacts/{{emergencyContactId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "emergency-contacts", "{{emergencyContactId}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fullName\": \"Dr. Mahmoud\",\n  \"relationship\": \"Pediatrician\",\n  \"phone\": \"+201000000031\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Emergency Contacts / Delete",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/emergency-contacts/{{emergencyContactId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "emergency-contacts", "{{emergencyContactId}}"]
+                }
+              }
+            }
+          ]
+        },
+        {
           "name": "Invites",
           "description": "Onboarding flow: admin creates an invite for a teacher or parent, then shares the returned one-time token with them so they can call `Auth / Accept Invite` to set a password.",
           "item": [
@@ -560,6 +1016,746 @@
               }
             }
           ]
+        },
+        {
+          "name": "Daily Logs",
+          "description": "Read-only oversight of daily logs across the nursery. Admins see both DRAFT and PUBLISHED entries (unlike parents). Teacher endpoints handle authoring.",
+          "item": [
+            {
+              "name": "List Logs for Child",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/daily-logs",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "daily-logs"]
+                },
+                "description": "Summaries of every daily log for a specific child, newest date first. Each row has `totalEntries` (DRAFT + PUBLISHED) and `publishedEntries` counts."
+              }
+            },
+            {
+              "name": "Get Log",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/daily-logs/{{dailyLogId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "daily-logs", "{{dailyLogId}}"]
+                },
+                "description": "Full daily log with all entries (DRAFT + PUBLISHED). Cross-tenant access returns 404."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Attendance",
+          "description": "Manual check-in/out and roster views for admins. Source on admin events is `ADMIN_MANUAL`. No geofence check for admin actions.",
+          "item": [
+            {
+              "name": "Manual Check In",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/attendance/check-in",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "attendance", "check-in"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Walked in with grandmother — pickup contact verified\"\n}"
+                },
+                "description": "Records an admin-initiated check-in for the child. Body is optional; `notes` (max 500) is stored on the event for audit. Returns the child's full attendance state for today."
+              }
+            },
+            {
+              "name": "Manual Check Out",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/attendance/check-out",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "attendance", "check-out"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Picked up early — doctor's appointment\"\n}"
+                },
+                "description": "Records an admin-initiated check-out. Same shape as check-in."
+              }
+            },
+            {
+              "name": "Nursery Roster (by date)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/attendance?date=2026-05-22",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "attendance"],
+                  "query": [
+                    { "key": "date", "value": "2026-05-22", "description": "ISO date (interpreted in the nursery's timezone)" },
+                    { "key": "roomId", "value": "{{roomId}}", "disabled": true, "description": "Optional — filter to a single room" }
+                  ]
+                },
+                "description": "Returns every enrolled child in the nursery with their attendance status for the requested date: `NOT_ARRIVED`, `PRESENT`, or `CHECKED_OUT`. Each row also carries `lastCheckInAt` / `lastCheckOutAt` and the raw event list for that day. Filter to a single room with `roomId`."
+              }
+            },
+            {
+              "name": "Child History",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/attendance/history?from=2026-05-01&to=2026-05-22",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "attendance", "history"],
+                  "query": [
+                    { "key": "from", "value": "2026-05-01", "description": "ISO date inclusive" },
+                    { "key": "to", "value": "2026-05-22", "description": "ISO date inclusive" }
+                  ]
+                },
+                "description": "Day-by-day summary for one child between `from` and `to` (inclusive). Useful for the admin's attendance history page in Figma. The FE can compute weekend/absent rendering from the response."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Incidents",
+          "description": "Admin-side incident reporting. PRD §6.3: 'Receive instant notification on each incident · View all incident reports across all rooms · Track parent acknowledgment per incident'. Admins can create, edit anytime (no author/ack restriction), and view ack rollup per guardian. Retained 2+ years (no delete API).",
+          "item": [
+            {
+              "name": "Create Incident",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/incidents",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "incidents"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"incidentAt\": \"2026-05-22T11:15:00Z\",\n  \"description\": \"Yara tripped during outdoor play and grazed her left knee. She cried briefly but recovered.\",\n  \"actionTaken\": \"Cleaned the area with antiseptic and applied a small bandage. She rejoined activities within 5 minutes.\",\n  \"injuryArea\": \"left knee\"\n}"
+                },
+                "description": "Create an incident report for a child in this nursery. Saves a snapshot of the child's current room. Fires `IncidentReportedEvent` (the Notifications slice will fan out to all linked guardians + other admins).\n\n**Body**\n- `incidentAt` (required ISO instant, must be past or now)\n- `description` (required, max 2000)\n- `actionTaken` (optional, max 2000)\n- `injuryArea` (optional, max 100) — set only when injury involved\n\n**Response (201)** auto-saves the new incident id into `{{incidentId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('incidentId', json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Incident",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/incidents/{{incidentId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "incidents", "{{incidentId}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"actionTaken\": \"Cleaned the area, applied bandage, parents informed via call at 11:30.\"\n}"
+                },
+                "description": "Admins can edit incidents at any time, even after parent acknowledgment. (Teachers, by contrast, can only edit their own incidents that haven't been acknowledged yet.)"
+              }
+            },
+            {
+              "name": "List All Incidents",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/incidents",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "incidents"]
+                },
+                "description": "Every incident in the nursery, newest first. Each row has total linked guardians and acknowledged count for quick sorting on the admin incident log."
+              }
+            },
+            {
+              "name": "Get Incident",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/incidents/{{incidentId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "incidents", "{{incidentId}}"]
+                }
+              }
+            },
+            {
+              "name": "List Incidents for Child",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/incidents",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "incidents"]
+                }
+              }
+            },
+            {
+              "name": "Acknowledgments",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/incidents/{{incidentId}}/acknowledgments",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "incidents", "{{incidentId}}", "acknowledgments"]
+                },
+                "description": "Per-guardian acknowledgment status for an incident. One row per current guardian of the child with `acknowledged: true/false` and `acknowledgedAt`. Drives the Figma 'seen / not seen' chip."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Teacher",
+      "description": "Teacher-only endpoints. Each teacher can only act on children whose current room they're assigned to via `Admin / Teachers / Assign Teacher to Room`. Cross-room access returns 404.\n\n**Publish model**: each `LogEntry` carries its own `publishedAt` state. Teachers can publish entries individually OR batch-publish all DRAFT entries in a daily log. Each publish event fires `DailyLogEntriesPublishedEvent` — the Notifications slice (later) will fan that out to push.",
+      "item": [
+        {
+          "name": "Daily Logs",
+          "item": [
+            {
+              "name": "Add Entry",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/log-entries",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "children", "{{childId}}", "log-entries"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"date\": \"2026-05-22\",\n  \"category\": \"MEAL\",\n  \"entryTime\": \"12:30:00\",\n  \"title\": \"Lunch\",\n  \"detail\": \"Ate all the rice and chicken, drank water\",\n  \"napMinutes\": null,\n  \"publish\": false\n}"
+                },
+                "description": "Add a log entry for a child. The system creates today's `DailyLog` if none exists yet, then attaches the entry.\n\n**Body**\n- `date` (required, ISO date, past-or-present)\n- `category` (required) — `MOOD`, `MEAL`, `NAP`, `DIAPER`, `ACTIVITY`, `MEDICATION`\n- `entryTime` (required, `HH:mm:ss`)\n- `title` (required, max 200)\n- `detail` (optional, max 2000)\n- `napMinutes` (optional integer, useful for NAP entries)\n- `publish` (optional bool, default false) — set true to publish immediately and fire the notification event in the same call\n\n**Response (201)** auto-saves the new entry id into `{{logEntryId}}` and the daily log id into `{{dailyLogId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('logEntryId', json.id);",
+                      "  if (json.dailyLogId) pm.collectionVariables.set('dailyLogId', json.dailyLogId);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Entry",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/log-entries/{{logEntryId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "log-entries", "{{logEntryId}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Lunch (updated)\",\n  \"detail\": \"Ate half — wasn't hungry today\"\n}"
+                },
+                "description": "Partial update. Cannot change `date`/`dailyLog`; if the entry has been published, edits do NOT re-fire a notification — call **Publish Entry** again if needed."
+              }
+            },
+            {
+              "name": "Delete Entry",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/log-entries/{{logEntryId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "log-entries", "{{logEntryId}}"]
+                },
+                "description": "Permanently remove a log entry. Any teacher assigned to the child's room may delete (PRD doesn't restrict to original author)."
+              }
+            },
+            {
+              "name": "Publish Entry",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/log-entries/{{logEntryId}}/publish",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "log-entries", "{{logEntryId}}", "publish"]
+                },
+                "description": "Mark a single entry as published. Fires `DailyLogEntriesPublishedEvent` (event payload includes the entry id, log id, child id). No-op if already published."
+              }
+            },
+            {
+              "name": "Unpublish Entry",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/log-entries/{{logEntryId}}/unpublish",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "log-entries", "{{logEntryId}}", "unpublish"]
+                },
+                "description": "Revert a published entry to DRAFT. Parent loses access immediately. No event fired."
+              }
+            },
+            {
+              "name": "Publish Log (batch)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/daily-logs/{{dailyLogId}}/publish",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "daily-logs", "{{dailyLogId}}", "publish"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"entryIds\": null\n}"
+                },
+                "description": "Publish multiple DRAFT entries in one call — useful for end-of-day flow. Fires ONE event with all entry ids (the Notifications slice can debounce into a single push).\n\n**Body**\n- `entryIds` (optional) — list of specific entry ids to publish. Pass `null` or omit to publish ALL currently-DRAFT entries in the log."
+              }
+            },
+            {
+              "name": "Get Log",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/daily-logs/{{dailyLogId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "daily-logs", "{{dailyLogId}}"]
+                },
+                "description": "Full log with all entries (DRAFT + PUBLISHED). Teacher must be assigned to the child's current room."
+              }
+            },
+            {
+              "name": "Get Log for Child by Date",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/daily-logs?date=2026-05-22",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "children", "{{childId}}", "daily-logs"],
+                  "query": [
+                    { "key": "date", "value": "2026-05-22", "description": "ISO date" }
+                  ]
+                },
+                "description": "Fetch the daily log for a specific (child, date). Returns 404 if no log exists yet (i.e. teacher hasn't added any entries that day)."
+              }
+            },
+            {
+              "name": "Room Feed",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/daily-logs?date=2026-05-22",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "rooms", "{{roomId}}", "daily-logs"],
+                  "query": [
+                    { "key": "date", "value": "2026-05-22", "description": "ISO date" }
+                  ]
+                },
+                "description": "Summaries for every child in the teacher's room for a given date. Each entry shows total + published counts so the teacher can spot drafts that still need publishing."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Attendance",
+          "description": "Teacher attendance — manual check-in/out for children whose parents didn't use the app (PRD §6.2 'Manual attendance mark'), plus the live room roster. No geofence check; source is `TEACHER_MANUAL`.",
+          "item": [
+            {
+              "name": "Manual Check In",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/attendance/check-in",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "children", "{{childId}}", "attendance", "check-in"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Arrived with mother at the gate\"\n}"
+                },
+                "description": "Manual check-in for a child in the teacher's assigned room. Body is optional. Returns the child's full attendance state for today."
+              }
+            },
+            {
+              "name": "Manual Check Out",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/attendance/check-out",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "children", "{{childId}}", "attendance", "check-out"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Picked up by father\"\n}"
+                },
+                "description": "Manual check-out for a child in the teacher's assigned room."
+              }
+            },
+            {
+              "name": "Room Roster",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/attendance?date=2026-05-22",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "rooms", "{{roomId}}", "attendance"],
+                  "query": [
+                    { "key": "date", "value": "2026-05-22", "description": "ISO date" }
+                  ]
+                },
+                "description": "Live attendance roster for the room on the given date. One row per enrolled child with `status`, `lastCheckInAt`, `lastCheckOutAt`, and the full event timeline. Backs the teacher's 'all / present / not arrived' filter from the Figma."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Incidents",
+          "description": "PRD §6.2: 'Separate structured form from daily log. On submit: admin notified immediately, parent receives formal notification. Parent acknowledgment tracked (seen / not seen).' Teacher can create + view incidents for children in their assigned rooms, and edit only their own incidents that no parent has acknowledged yet.",
+          "item": [
+            {
+              "name": "Create Incident",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/incidents",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "children", "{{childId}}", "incidents"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"incidentAt\": \"2026-05-22T11:15:00Z\",\n  \"description\": \"Yara tripped during outdoor play and grazed her left knee. She cried briefly but recovered.\",\n  \"actionTaken\": \"Cleaned the area with antiseptic and applied a small bandage. She rejoined activities within 5 minutes.\",\n  \"injuryArea\": \"left knee\"\n}"
+                },
+                "description": "Same shape as the admin endpoint, but the teacher must be assigned to the child's current room. Author is recorded as the teacher. The test script saves `{{incidentId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('incidentId', json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Incident",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/incidents/{{incidentId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "incidents", "{{incidentId}}"]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"actionTaken\": \"Cleaned the area and applied a bandage. Parents informed in person at pickup.\"\n}"
+                },
+                "description": "Edit only allowed if: (a) you authored this incident AND (b) no parent has acknowledged it yet. 403 if not author, 409 if already acknowledged (ask an admin to edit after acknowledgement)."
+              }
+            },
+            {
+              "name": "Get Incident",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/incidents/{{incidentId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "incidents", "{{incidentId}}"]
+                }
+              }
+            },
+            {
+              "name": "List Incidents for Child",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/incidents",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "children", "{{childId}}", "incidents"]
+                }
+              }
+            },
+            {
+              "name": "List Incidents for Room",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/incidents",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "rooms", "{{roomId}}", "incidents"]
+                }
+              }
+            },
+            {
+              "name": "Acknowledgments",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/incidents/{{incidentId}}/acknowledgments",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "incidents", "{{incidentId}}", "acknowledgments"]
+                },
+                "description": "Per-guardian ack status — lets the teacher see whether the parent has read the report (useful before raising it again at pickup)."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Parent",
+      "description": "Parent self-service endpoints. Requires role PARENT. Lists children the parent is linked to via `GuardianLink` and the child is still enrolled (`enrollmentStatus = ENROLLED`). Unenrolled children disappear from these endpoints immediately.",
+      "item": [
+        {
+          "name": "List My Children",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/children",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "children"]
+            },
+            "description": "Returns the currently authenticated parent's enrolled children (one row per child, ordered by link creation date)."
+          }
+        },
+        {
+          "name": "Get Child Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/children/{{childId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "children", "{{childId}}"]
+            },
+            "description": "Returns the child profile plus authorized pickups and emergency contacts. Returns 404 if the parent isn't linked to this child OR the child is unenrolled (deliberately the same code so we don't leak existence)."
+          }
+        },
+        {
+          "name": "Daily Log for Date",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/children/{{childId}}/daily-logs?date=2026-05-22",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "children", "{{childId}}", "daily-logs"],
+              "query": [
+                { "key": "date", "value": "2026-05-22", "description": "ISO date" }
+              ]
+            },
+            "description": "Returns the child's daily log for the specified date — **published entries only** (DRAFT entries are invisible to parents). Returns 404 if no log exists for that date, or the parent isn't linked, or the child is unenrolled."
+          }
+        },
+        {
+          "name": "Daily Log History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/children/{{childId}}/daily-logs?from=2026-05-01&to=2026-05-22",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "children", "{{childId}}", "daily-logs"],
+              "query": [
+                { "key": "from", "value": "2026-05-01", "description": "ISO date inclusive" },
+                { "key": "to", "value": "2026-05-22", "description": "ISO date inclusive" }
+              ]
+            },
+            "description": "Day-by-day summaries between `from` and `to` (inclusive) with at least one published entry. Each entry shows the published count; drill into a date via **Daily Log for Date** to see full entries."
+          }
+        },
+        {
+          "name": "Nursery Info (geofence + hours)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/nursery",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "nursery"]
+            },
+            "description": "Returns the parent's nursery profile: name, logo, timezone, opening hours, geofence center + radius. The mobile app uses `geofenceLat`/`geofenceLng`/`geofenceRadiusM` to gray out the Check In button when the device is outside the radius. Server still validates on POST — see PRD §7 (geofence)."
+          }
+        },
+        {
+          "name": "Check In",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/children/{{childId}}/attendance/check-in",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "children", "{{childId}}", "attendance", "check-in"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 30.0444,\n  \"lng\": 31.2357,\n  \"accuracyM\": 8.5\n}"
+            },
+            "description": "Parent-app check-in. **Server-side geofence enforcement** (PRD §7): the request fails with 403 if the GPS coordinates are outside the nursery's configured radius + 10 m drift buffer. Returns 409 if the nursery hasn't configured geofence yet.\n\n**Body**\n- `lat` (required, -90..90)\n- `lng` (required, -180..180)\n- `accuracyM` (optional positive — passed through to the audit row)\n\nSource on the resulting event is `PARENT_APP`."
+          }
+        },
+        {
+          "name": "Check Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/children/{{childId}}/attendance/check-out",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "children", "{{childId}}", "attendance", "check-out"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lat\": 30.0444,\n  \"lng\": 31.2357,\n  \"accuracyM\": 8.5\n}"
+            },
+            "description": "Parent-app check-out. Same shape and geofence behaviour as check-in."
+          }
+        },
+        {
+          "name": "Attendance for Date",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/children/{{childId}}/attendance?date=2026-05-22",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "children", "{{childId}}", "attendance"],
+              "query": [
+                { "key": "date", "value": "2026-05-22", "description": "ISO date" }
+              ]
+            },
+            "description": "Today's (or any past day's) attendance state for one of the parent's children: status, last check-in/out times, and the full event list for that day."
+          }
+        },
+        {
+          "name": "Attendance History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/children/{{childId}}/attendance/history?from=2026-05-01&to=2026-05-22",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "children", "{{childId}}", "attendance", "history"],
+              "query": [
+                { "key": "from", "value": "2026-05-01", "description": "ISO date inclusive" },
+                { "key": "to", "value": "2026-05-22", "description": "ISO date inclusive" }
+              ]
+            },
+            "description": "One row per calendar day in the range with status + last check-in/out. Drives the parent attendance-history calendar in the Figma — FE renders weekend cells from the dates themselves, absent cells from `status = NOT_ARRIVED`."
+          }
+        },
+        {
+          "name": "List Incidents for Child",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/children/{{childId}}/incidents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "children", "{{childId}}", "incidents"]
+            },
+            "description": "All incidents for one of the parent's linked enrolled children, newest first. Each row carries `acknowledged: true/false` and `acknowledgedAt` for the calling parent specifically."
+          }
+        },
+        {
+          "name": "Get Incident",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/incidents/{{incidentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "incidents", "{{incidentId}}"]
+            },
+            "description": "Full incident detail. Returns 404 if the parent isn't linked or the child is unenrolled (same code on purpose — no existence leak)."
+          }
+        },
+        {
+          "name": "Acknowledge Incident",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/incidents/{{incidentId}}/acknowledge",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "incidents", "{{incidentId}}", "acknowledge"]
+            },
+            "description": "Mark the incident as 'seen' for the calling parent. Idempotent — second call is a no-op (acknowledgedAt stays the original timestamp). Fires `IncidentAcknowledgedEvent` only on the first ack so the admin notification doesn't repeat."
+          }
         }
       ]
     }
