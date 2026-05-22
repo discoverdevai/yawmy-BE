@@ -1,0 +1,12 @@
+package com.discoverdev.nms.notification;
+
+public enum NotificationType {
+    DAILY_LOG_PUBLISHED,
+    ATTENDANCE_CHECK_IN,
+    ATTENDANCE_CHECK_OUT,
+    INCIDENT_REPORTED,
+    INCIDENT_ACKNOWLEDGED,
+    MEDIA_UPLOADED,
+    ANNOUNCEMENT_PUBLISHED,
+    EVENT_CREATED
+}

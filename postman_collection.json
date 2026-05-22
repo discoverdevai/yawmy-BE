@@ -31,7 +31,8 @@
     { "key": "incidentId", "value": "", "type": "string" },
     { "key": "mediaId", "value": "", "type": "string" },
     { "key": "announcementId", "value": "", "type": "string" },
-    { "key": "eventId", "value": "", "type": "string" }
+    { "key": "eventId", "value": "", "type": "string" },
+    { "key": "notificationId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -2376,6 +2377,140 @@
               "path": ["api", "parent", "events", "saved"]
             },
             "description": "Backs the Figma 'Saved' events tab in the parent app."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Me",
+      "description": "Cross-role endpoints scoped to the authenticated user. The notification center backs the Figma 'Notifications' screen (mark-as-read, delete-all). Preferences include PRD §6.1 'Toggle announcement notifications on/off' and 'Quiet hours setting'.\n\n**Quiet hours** are stored but not yet enforced — they take effect once push delivery is wired up (deferred to a follow-up).",
+      "item": [
+        {
+          "name": "Notifications / List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notifications?status=all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "notifications"],
+              "query": [
+                { "key": "status", "value": "all", "description": "`all` (default) or `unread`" }
+              ]
+            },
+            "description": "All non-deleted notifications for the current user, newest first. Test script saves the first id into `{{notificationId}}`.",
+            "auth": null
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const arr = pm.response.json();",
+                  "  if (arr.length > 0) pm.collectionVariables.set('notificationId', arr[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Notifications / Unread Count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notifications/unread-count",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "notifications", "unread-count"]
+            },
+            "description": "Returns `{ unread: <number> }`. Use this for the badge on the parent home screen."
+          }
+        },
+        {
+          "name": "Notifications / Mark Read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notifications/{{notificationId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "notifications", "{{notificationId}}", "read"]
+            },
+            "description": "Idempotent — second call returns the same `readAt` timestamp."
+          }
+        },
+        {
+          "name": "Notifications / Mark All Read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notifications/read-all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "notifications", "read-all"]
+            },
+            "description": "Returns the resulting `unread` count (should be 0)."
+          }
+        },
+        {
+          "name": "Notifications / Delete",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notifications/{{notificationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "notifications", "{{notificationId}}"]
+            },
+            "description": "Soft delete — sets `deleted_at`. The row is hidden from list endpoints but retained for audit."
+          }
+        },
+        {
+          "name": "Notifications / Delete All",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notifications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "notifications"]
+            },
+            "description": "Backs the Figma 'Delete All' button on the notifications screen. Soft-deletes every non-deleted notification for the caller."
+          }
+        },
+        {
+          "name": "Preferences / Get",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notification-preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "notification-preferences"]
+            },
+            "description": "Returns current preferences or defaults (`announcementsEnabled: true`, quiet hours null) if the user hasn't customized them yet."
+          }
+        },
+        {
+          "name": "Preferences / Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/notification-preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "notification-preferences"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quietHoursStart\": \"22:00:00\",\n  \"quietHoursEnd\": \"07:00:00\",\n  \"announcementsEnabled\": false\n}"
+            },
+            "description": "Partial update. Any field may be omitted. Set `clearQuietHours: true` to wipe the window. Stored as `LocalTime` (no date); push delivery will compute the in-window check against the user's nursery timezone when wired up."
           }
         }
       ]
