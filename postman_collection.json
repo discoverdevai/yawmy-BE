@@ -28,7 +28,8 @@
     { "key": "dailyLogId", "value": "", "type": "string" },
     { "key": "logEntryId", "value": "", "type": "string" },
     { "key": "attendanceEventId", "value": "", "type": "string" },
-    { "key": "incidentId", "value": "", "type": "string" }
+    { "key": "incidentId", "value": "", "type": "string" },
+    { "key": "mediaId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -1234,6 +1235,130 @@
               }
             }
           ]
+        },
+        {
+          "name": "Media",
+          "description": "Photos and videos uploaded by staff. PRD §6.2 (teacher uploads per child or per room, bulk), §6.3 (admin can delete any media anytime). Soft-deleted rows are retained for the 30-day post-unenrollment grace window. Storage is local disk for dev; the same MediaStorage abstraction will swap to S3 in prod.\n\n**Accepted types**: `image/jpeg`, `image/png`, `image/webp` (≤5 MB); `video/mp4`, `video/quicktime` (≤50 MB).",
+          "item": [
+            {
+              "name": "Upload For Child",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/media",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "media"]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "files", "type": "file", "src": [], "description": "One or more photo/video files (multi-select)" },
+                    { "key": "caption", "type": "text", "value": "Lunch at the Sunflower room", "description": "Optional caption applied to all files in this upload" }
+                  ]
+                },
+                "description": "Bulk upload — pass multiple `files` parts. Returns `{uploaded:[...], failed:[{filename, reason}]}`. Per-file failures are reported individually; the upload is **not all-or-nothing** (PRD: lose 4 photos because file #5 was HEIC would be bad UX).\n\nThe test script saves the first uploaded id into `{{mediaId}}` so subsequent requests can target it."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.uploaded && json.uploaded.length > 0) {",
+                      "    pm.collectionVariables.set('mediaId', json.uploaded[0].id);",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Upload For Room",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/media",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms", "{{roomId}}", "media"]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "files", "type": "file", "src": [], "description": "Photo/video files" },
+                    { "key": "caption", "type": "text", "value": "Room field trip", "description": "Optional shared caption" }
+                  ]
+                },
+                "description": "Room-scoped upload. Visible to every parent whose enrolled child currently belongs to this room (later joiners see historical media; earlier leavers lose access)."
+              }
+            },
+            {
+              "name": "Delete",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/media/{{mediaId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "media", "{{mediaId}}"]
+                },
+                "description": "Soft delete (sets `deleted_at`). Admins can delete any media anytime; teachers are restricted to their own uploads within 24 h."
+              }
+            },
+            {
+              "name": "List For Child",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/children/{{childId}}/media",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "children", "{{childId}}", "media"],
+                  "query": [
+                    { "key": "from", "value": "2026-05-01", "disabled": true, "description": "Optional ISO date inclusive" },
+                    { "key": "to", "value": "2026-05-22", "disabled": true, "description": "Optional ISO date inclusive" }
+                  ]
+                },
+                "description": "Child-scoped media (not the parent's full gallery — admin sees just media where `child_id == :childId`)."
+              }
+            },
+            {
+              "name": "List For Room",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/media",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "rooms", "{{roomId}}", "media"],
+                  "query": [
+                    { "key": "date", "value": "2026-05-22", "disabled": true, "description": "Optional ISO date" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "List Nursery-Wide",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/media",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "media"],
+                  "query": [
+                    { "key": "from", "value": "2026-05-01", "disabled": true, "description": "Optional ISO date inclusive" },
+                    { "key": "to", "value": "2026-05-22", "disabled": true, "description": "Optional ISO date inclusive" }
+                  ]
+                },
+                "description": "All non-deleted media in the nursery, newest first. Useful for admin oversight."
+              }
+            }
+          ]
         }
       ]
     },
@@ -1568,6 +1693,111 @@
               }
             }
           ]
+        },
+        {
+          "name": "Media",
+          "description": "Teacher photo/video uploads per child or per room. Teachers can only target children in their assigned rooms, and can only delete their **own** uploads within **24 h** (PRD §6.2). After that window, ask an admin.",
+          "item": [
+            {
+              "name": "Upload For Child",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/media",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "children", "{{childId}}", "media"]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "files", "type": "file", "src": [], "description": "One or more files" },
+                    { "key": "caption", "type": "text", "value": "Painting class today", "description": "Optional caption" }
+                  ]
+                },
+                "description": "Bulk upload for one child. Same response shape as the admin endpoint; the test script saves `{{mediaId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.uploaded && json.uploaded.length > 0) {",
+                      "    pm.collectionVariables.set('mediaId', json.uploaded[0].id);",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Upload For Room",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/media",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "rooms", "{{roomId}}", "media"]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "files", "type": "file", "src": [], "description": "One or more files" },
+                    { "key": "caption", "type": "text", "value": "Group painting", "description": "Optional caption" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Delete Own",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/media/{{mediaId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "media", "{{mediaId}}"]
+                },
+                "description": "Returns 403 if you're not the uploader, 409 if the 24-hour window has elapsed."
+              }
+            },
+            {
+              "name": "List For Child",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/media",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "children", "{{childId}}", "media"],
+                  "query": [
+                    { "key": "from", "value": "2026-05-01", "disabled": true },
+                    { "key": "to", "value": "2026-05-22", "disabled": true }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "List For Room",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/media",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "teacher", "rooms", "{{roomId}}", "media"],
+                  "query": [
+                    { "key": "date", "value": "2026-05-22", "disabled": true }
+                  ]
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -1755,6 +1985,56 @@
               "path": ["api", "parent", "incidents", "{{incidentId}}", "acknowledge"]
             },
             "description": "Mark the incident as 'seen' for the calling parent. Idempotent — second call is a no-op (acknowledgedAt stays the original timestamp). Fires `IncidentAcknowledgedEvent` only on the first ack so the admin notification doesn't repeat."
+          }
+        },
+        {
+          "name": "Media Gallery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/children/{{childId}}/media",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "children", "{{childId}}", "media"],
+              "query": [
+                { "key": "date", "value": "2026-05-22", "disabled": true, "description": "Optional — single day" },
+                { "key": "from", "value": "2026-05-01", "disabled": true, "description": "Optional — range start (inclusive)" },
+                { "key": "to", "value": "2026-05-22", "disabled": true, "description": "Optional — range end (inclusive)" }
+              ]
+            },
+            "description": "Parent's per-child gallery. Aggregates **two** sources, both filtered to non-deleted items:\n- Child-scoped media (uploaded directly to this child)\n- Room-scoped media for the child's current room (so a 'Sunflower room party' upload shows up for every Sunflower kid's parent)\n\nResults are merged and sorted newest-first. View-only — parents cannot delete (PRD §6.1). 404 if the child is unenrolled or the parent isn't linked."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Files",
+      "description": "Authenticated binary downloads. URLs are emitted by other endpoints (e.g. `photoUrl`, `fileUrl`). Access is role-aware and re-checked on each request.",
+      "item": [
+        {
+          "name": "Download Child Photo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/children/{{childId}}/photo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "children", "{{childId}}", "photo"]
+            },
+            "description": "Stream the child's profile photo (set via `Admin / Children / Upload Photo`). Returns 404 if no photo or no access."
+          }
+        },
+        {
+          "name": "Download Media File",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/files/media/{{mediaId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "files", "media", "{{mediaId}}"]
+            },
+            "description": "Stream a media item (photo or video). Access rules:\n- ADMIN: any media in same nursery\n- TEACHER: media whose scope room matches one of their assignments (room-scoped media, or child-scoped media for children in their assigned rooms)\n- PARENT: media linked to one of their children OR room-scoped media for the child's current room\n\nReturns 404 for cross-nursery, deleted, or unauthorized access (deliberately the same code — no existence leak)."
           }
         }
       ]
