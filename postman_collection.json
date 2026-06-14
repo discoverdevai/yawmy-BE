@@ -32,7 +32,10 @@
     { "key": "mediaId", "value": "", "type": "string" },
     { "key": "announcementId", "value": "", "type": "string" },
     { "key": "eventId", "value": "", "type": "string" },
-    { "key": "notificationId", "value": "", "type": "string" }
+    { "key": "notificationId", "value": "", "type": "string" },
+    { "key": "chatThreadId", "value": "", "type": "string" },
+    { "key": "chatMessageId", "value": "", "type": "string" },
+    { "key": "chatParticipantId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -2511,6 +2514,300 @@
               "raw": "{\n  \"quietHoursStart\": \"22:00:00\",\n  \"quietHoursEnd\": \"07:00:00\",\n  \"announcementsEnabled\": false\n}"
             },
             "description": "Partial update. Any field may be omitted. Set `clearQuietHours: true` to wipe the window. Stored as `LocalTime` (no date); push delivery will compute the in-window check against the user's nursery timezone when wired up."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "description": "Three thread types per PRD §6.1/§6.2/§6.3:\n- **DIRECT** — 1-on-1; opened idempotently by either party via the role-specific opener endpoints below.\n- **ROOM_GROUP** — one per room, created by a teacher; auto-populated with the room's teachers + parents of enrolled children.\n- **STAFF_GROUP** — one per nursery; auto-populated with all teachers + admins.\n\n**Real-time delivery**: STOMP over WebSocket at `ws://{{host}}/ws-chat?access_token=<JWT>`. Subscribe to `/topic/threads/{threadId}` to receive `MessageResponse` payloads. Per-subscription access is enforced server-side (you can only subscribe to threads you're an active participant in). REST endpoints below are the source of truth — clients should still call them for history, sending, reactions, etc.\n\n**Out-of-hours indicator** is computed at send time from the nursery's configured `hoursStart`/`hoursEnd` (PRD §6.1). Only set on messages where `sender.role == PARENT`.\n\n**Mute** (`PATCH /threads/{id}` with `{muted: true}`) silences notifications **and** blocks sending — applies to both self-mute and admin moderation mute (PRD §6.3 'Mute any participant').\n\n**Read receipts** are per-thread cursors (one row per participant): `POST /threads/{id}/read` with the latest message id you've seen. Double-tick rendering is up to the FE comparing senders' cursors.\n\n**6-month retention** is deferred to a scheduled-jobs follow-up — chat messages are soft-deleted (deletedAt) and a future purge job will hard-delete past 6 months.",
+      "item": [
+        {
+          "name": "Parent / Open DM with Teacher",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/chat/threads/teacher/{{teacherId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "chat", "threads", "teacher", "{{teacherId}}"]
+            },
+            "description": "Idempotent — returns the existing DM if one exists. 403 if the teacher doesn't teach any of the parent's enrolled children's rooms.\n\nSaves `{{chatThreadId}}`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.id) pm.collectionVariables.set('chatThreadId', j.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Parent / Open DM with Admin",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/parent/chat/threads/admin/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "parent", "chat", "threads", "admin", "{{userId}}"]
+            },
+            "description": "Set `{{userId}}` to an admin's id."
+          }
+        },
+        {
+          "name": "Teacher / Open DM with Parent",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/teacher/chat/threads/parent/{{guardianId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "teacher", "chat", "threads", "parent", "{{guardianId}}"]
+            },
+            "description": "403 if the parent has no enrolled child in any of the teacher's assigned rooms."
+          }
+        },
+        {
+          "name": "Teacher / Open Room Group",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/teacher/chat/threads/room/{{roomId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "teacher", "chat", "threads", "room", "{{roomId}}"]
+            },
+            "description": "PRD §6.2 'Initiate room group chat (teacher is creator)'. Idempotent — one ROOM_GROUP per room. Adds all current room teachers + parents of enrolled children as participants."
+          }
+        },
+        {
+          "name": "Teacher / Open Staff Group",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/teacher/chat/threads/staff",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "teacher", "chat", "threads", "staff"]
+            },
+            "description": "PRD §6.2 'Staff chat: private group with all teachers + admin, no parents'. Idempotent — one per nursery."
+          }
+        },
+        {
+          "name": "Admin / Open DM with Any User",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/chat/threads/user/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "chat", "threads", "user", "{{userId}}"]
+            },
+            "description": "PRD §6.3 'Admin: 1-on-1 with any user'."
+          }
+        },
+        {
+          "name": "Admin / Mute Participant",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/chat/participants/{{chatParticipantId}}/mute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "chat", "participants", "{{chatParticipantId}}", "mute"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"muted\": true\n}"
+            },
+            "description": "PRD §6.3 'Mute any participant in any group chat'. Sets the `muted` flag — the target user receives no notifications for this thread AND cannot send to it."
+          }
+        },
+        {
+          "name": "List My Threads",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/chat/threads",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "chat", "threads"]
+            },
+            "description": "All threads I'm an active participant in, newest-message first. Each row carries `unreadCount` + last-message preview + my per-thread `muted` flag."
+          }
+        },
+        {
+          "name": "Get Thread",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/chat/threads/{{chatThreadId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "chat", "threads", "{{chatThreadId}}"]
+            },
+            "description": "Full thread metadata + full participant list (including those who left). Use this after opening a DM to grab the other party's userId for follow-up sends."
+          }
+        },
+        {
+          "name": "History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/chat/threads/{{chatThreadId}}/messages?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "chat", "threads", "{{chatThreadId}}", "messages"],
+              "query": [
+                { "key": "before", "value": "2026-05-22T18:00:00Z", "disabled": true, "description": "ISO instant for pagination cursor — fetch messages older than this" },
+                { "key": "limit", "value": "50", "description": "1-200, default 50" }
+              ]
+            },
+            "description": "Paginated message history, newest first. Pass `before` (an ISO instant from the oldest message you have) to scroll back."
+          }
+        },
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/chat/threads/{{chatThreadId}}/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "chat", "threads", "{{chatThreadId}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Hi! Quick question about pickup today.\",\n  \"replyToMessageId\": null,\n  \"attachmentMediaIds\": []\n}"
+            },
+            "description": "Send a message. `replyToMessageId` lets you quote an earlier message in the same thread (server returns a short `replyToPreview` for rendering). `attachmentMediaIds` references existing MediaItem ids — upload via `Admin/Teacher Media / Upload For ...` first.\n\n403 if you're muted in this thread. Saves new id into `{{chatMessageId}}`. Server broadcasts the same payload to `/topic/threads/{id}` for any active WebSocket subscribers."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const j = pm.response.json();",
+                  "  if (j.id) pm.collectionVariables.set('chatMessageId', j.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mark Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/chat/threads/{{chatThreadId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "chat", "threads", "{{chatThreadId}}", "read"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lastReadMessageId\": \"{{chatMessageId}}\"\n}"
+            },
+            "description": "Bump the per-thread read cursor. `unreadCount` in the thread list is computed from this. Call when the user opens the conversation in the UI."
+          }
+        },
+        {
+          "name": "Set Mute (self)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/chat/threads/{{chatThreadId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "chat", "threads", "{{chatThreadId}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"muted\": true\n}"
+            },
+            "description": "PRD §6.1 'Mute individual chats (1-on-1 or group) user-controlled'. Silences notifications for this thread and blocks the caller from sending until unmuted."
+          }
+        },
+        {
+          "name": "Add Reaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/chat/messages/{{chatMessageId}}/reactions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "chat", "messages", "{{chatMessageId}}", "reactions"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emoji\": \"👍\"\n}"
+            },
+            "description": "Returns the updated message with all reactions grouped by emoji and the userIds reacting."
+          }
+        },
+        {
+          "name": "Remove Reaction",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/chat/messages/{{chatMessageId}}/reactions?emoji=👍",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "chat", "messages", "{{chatMessageId}}", "reactions"],
+              "query": [
+                { "key": "emoji", "value": "👍" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Message",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/chat/messages/{{chatMessageId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "me", "chat", "messages", "{{chatMessageId}}"]
+            },
+            "description": "Soft delete. Sender can delete their own message. Admins can delete any message in their nursery (PRD §6.3 'Remove any message in any group chat')."
+          }
+        },
+        {
+          "name": "WebSocket Connect (reference)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "ws://localhost:8080/ws-chat?access_token=YOUR_JWT_HERE",
+              "host": ["ws", "localhost:8080"],
+              "path": ["ws-chat"],
+              "query": [
+                { "key": "access_token", "value": "YOUR_JWT_HERE", "description": "JWT for handshake auth — browsers can't add headers to native WS, so token goes in query" }
+              ]
+            },
+            "description": "**This is a reference URL only** — Postman's REST runner can't actually connect to WebSockets. Use Postman's separate WebSocket client (New → WebSocket Request) with this URL, then send STOMP CONNECT/SUBSCRIBE frames.\n\n**STOMP frames after connect**:\n```\nSUBSCRIBE\nid:sub-0\ndestination:/topic/threads/{{chatThreadId}}\n\n^@\n```\n\nServer-side validation: handshake fails (4xx) if `access_token` is missing/invalid/disabled; SUBSCRIBE is silently rejected if you aren't an active participant of that thread."
           }
         }
       ]

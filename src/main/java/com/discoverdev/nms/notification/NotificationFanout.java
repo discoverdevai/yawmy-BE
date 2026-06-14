@@ -7,6 +7,12 @@ import com.discoverdev.nms.announcement.AnnouncementScope;
 import com.discoverdev.nms.attendance.AttendanceDates;
 import com.discoverdev.nms.attendance.AttendanceEventRecordedEvent;
 import com.discoverdev.nms.attendance.AttendanceEventType;
+import com.discoverdev.nms.chat.ChatMessage;
+import com.discoverdev.nms.chat.ChatMessageRepository;
+import com.discoverdev.nms.chat.ChatMessageSentEvent;
+import com.discoverdev.nms.chat.ChatParticipantRepository;
+import com.discoverdev.nms.chat.ChatThread;
+import com.discoverdev.nms.chat.ChatThreadType;
 import com.discoverdev.nms.child.Child;
 import com.discoverdev.nms.child.ChildRepository;
 import com.discoverdev.nms.dailylog.DailyLog;
@@ -53,6 +59,8 @@ public class NotificationFanout {
     private final MediaItemRepository mediaRepository;
     private final AnnouncementRepository announcementRepository;
     private final NurseryEventRepository eventRepository;
+    private final ChatMessageRepository chatMessageRepository;
+    private final ChatParticipantRepository chatParticipantRepository;
 
     public NotificationFanout(
         NotificationRepository notificationRepository,
@@ -65,7 +73,9 @@ public class NotificationFanout {
         IncidentReportRepository incidentRepository,
         MediaItemRepository mediaRepository,
         AnnouncementRepository announcementRepository,
-        NurseryEventRepository eventRepository
+        NurseryEventRepository eventRepository,
+        ChatMessageRepository chatMessageRepository,
+        ChatParticipantRepository chatParticipantRepository
     ) {
         this.notificationRepository = notificationRepository;
         this.prefRepository = prefRepository;
@@ -78,6 +88,8 @@ public class NotificationFanout {
         this.mediaRepository = mediaRepository;
         this.announcementRepository = announcementRepository;
         this.eventRepository = eventRepository;
+        this.chatMessageRepository = chatMessageRepository;
+        this.chatParticipantRepository = chatParticipantRepository;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -254,6 +266,36 @@ public class NotificationFanout {
         writeForUsers(recipients, nursery, NotificationType.EVENT_CREATED,
             title, body, "event", event.eventId(), null,
             event.authorUserId());
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void fanoutChatMessage(ChatMessageSentEvent event) {
+        ChatMessage msg = chatMessageRepository.findById(event.messageId()).orElse(null);
+        if (msg == null || msg.getDeletedAt() != null) return;
+        Nursery nursery = nurseryRepository.findById(event.nurseryId()).orElse(null);
+        if (nursery == null) return;
+        ChatThread t = msg.getThread();
+
+        String threadLabel = switch (event.threadType()) {
+            case DIRECT -> msg.getSender().getFullName();
+            case ROOM_GROUP -> t.getRoom() != null ? (t.getRoom().getName() + " room") : "Room chat";
+            case STAFF_GROUP -> "Staff chat";
+        };
+        String title = "New message in " + threadLabel;
+        String bodyPreview = msg.getBody().length() > 100
+            ? msg.getBody().substring(0, 100) + "…"
+            : msg.getBody();
+        String body = msg.getSender().getFullName() + ": " + bodyPreview;
+
+        for (UUID userId : event.recipientUserIds()) {
+            chatParticipantRepository.findByThreadIdAndUserId(t.getId(), userId).ifPresent(p -> {
+                if (p.isMuted()) return;
+                User recipient = p.getUser();
+                if (!recipient.isEnabled()) return;
+                writeForUsers(List.of(recipient), nursery, NotificationType.NEW_MESSAGE,
+                    title, body, "chat_thread", t.getId(), null, null);
+            });
+        }
     }
 
     private void writeForUsers(

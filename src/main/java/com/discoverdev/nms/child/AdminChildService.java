@@ -1,5 +1,6 @@
 package com.discoverdev.nms.child;
 
+import com.discoverdev.nms.chat.ChatAccessService;
 import com.discoverdev.nms.child.dto.ChildResponse;
 import com.discoverdev.nms.child.dto.CreateChildRequest;
 import com.discoverdev.nms.child.dto.ReassignRoomRequest;
@@ -23,15 +24,21 @@ public class AdminChildService {
     private final ChildRepository childRepository;
     private final RoomRepository roomRepository;
     private final NurseryRepository nurseryRepository;
+    private final GuardianLinkRepository guardianLinkRepository;
+    private final ChatAccessService chatAccess;
 
     public AdminChildService(
         ChildRepository childRepository,
         RoomRepository roomRepository,
-        NurseryRepository nurseryRepository
+        NurseryRepository nurseryRepository,
+        GuardianLinkRepository guardianLinkRepository,
+        ChatAccessService chatAccess
     ) {
         this.childRepository = childRepository;
         this.roomRepository = roomRepository;
         this.nurseryRepository = nurseryRepository;
+        this.guardianLinkRepository = guardianLinkRepository;
+        this.chatAccess = chatAccess;
     }
 
     @Transactional
@@ -109,7 +116,12 @@ public class AdminChildService {
         }
         child.setEnrollmentStatus(EnrollmentStatus.UNENROLLED);
         child.setUnenrolledAt(Instant.now());
-        return ChildResponse.of(childRepository.save(child));
+        Child saved = childRepository.save(child);
+        // PRD §6.1: "All chat access revoked immediately on unenrollment".
+        // Revoke chat for each linked guardian who now has no other enrolled children.
+        guardianLinkRepository.findByChildIdOrderByCreatedAtAsc(saved.getId())
+            .forEach(link -> chatAccess.revokeParentIfNoEnrolledChildren(link.getGuardian()));
+        return ChildResponse.of(saved);
     }
 
     @Transactional
