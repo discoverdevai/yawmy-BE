@@ -23,3 +23,7 @@ Thumbs.db
 .claude/
 .prd_extract/
 uploads/
+
+.env
+.env.local
+

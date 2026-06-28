@@ -1,0 +1,27 @@
+target/
+.git/
+.gitignore
+.gitattributes
+
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.project
+.classpath
+
+.claude/
+.prd_extract/
+uploads/
+
+*.log
+.env
+.env.local
+.env.*
+
+NMS PRD.docx
+postman_collection.json
+README.md
+*.md

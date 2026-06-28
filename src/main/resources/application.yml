@@ -11,15 +11,14 @@ spring:
       max-request-size: 200MB
 
   datasource:
-    url: jdbc:h2:mem:nmsdb;MODE=LEGACY;DB_CLOSE_DELAY=-1
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+    url: jdbc:postgresql://bprwanjsro5syxr6p0d9-postgresql.services.clever-cloud.com:50013/bprwanjsro5syxr6p0d9
+    username: u1x2mwtzdfhjqhd0busz
+    password: YF3iSbgs7uUxPSwgEX7kkR89ZXaRjz
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
 
   jpa:
     hibernate:
@@ -28,11 +27,12 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.H2Dialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
 
 app:
   jwt:
-    # 256-bit base64-encoded secret. Override in prod via APP_JWT_SECRET env var.
     secret: "Y2hhbmdlLW1lLXRoaXMtaXMtYS1kZXYtb25seS1qd3Qtc2VjcmV0LWtleS0yNTY="
     access-token-ttl-minutes: 30
     refresh-token-ttl-days: 14
