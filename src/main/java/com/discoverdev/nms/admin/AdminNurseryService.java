@@ -33,6 +33,7 @@ public class AdminNurseryService {
         if (req.timezone() != null) nursery.setTimezone(req.timezone());
         if (req.hoursStart() != null) nursery.setHoursStart(req.hoursStart());
         if (req.hoursEnd() != null) nursery.setHoursEnd(req.hoursEnd());
+        if (req.workingDays() != null) nursery.setWorkingDays(req.workingDays());
         if (nursery.getHoursStart() != null
             && nursery.getHoursEnd() != null
             && !nursery.getHoursEnd().isAfter(nursery.getHoursStart())) {

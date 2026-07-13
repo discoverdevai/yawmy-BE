@@ -2,40 +2,140 @@
   "info": {
     "name": "Nursery Management System (NMS) API",
     "_postman_id": "9b1d2f3a-4d5e-4c1a-9d6f-1a2b3c4d5e6f",
-    "description": "Postman collection for the Nursery Management System backend (Spring Boot).\n\n**Base URL** is controlled by the `baseUrl` variable (default `http://localhost:8080`).\n\n**Two-layer SaaS model**\n- **Super Admin** (platform owner / DiscoverDev): provisions new nurseries and invites their first admin(s). Not attached to any nursery. The bootstrap account is a super admin.\n- **Admin** (nursery manager): scoped to a single nursery. Configures nursery setup, creates rooms, invites teachers/parents — and can also invite additional admins within their own nursery.\n- **Teacher / Parent**: invited by an admin of their nursery.\n\n**Auth model**\n- Access tokens (JWT) carry `sub`, `email`, and `role` and **do not expire**. Revocation happens server-side by setting `User.enabled = false` (`Admin / Users / Disable User`).\n- Refresh tokens exist for compatibility but are optional.\n- \"Logout\" is a frontend concern — discard the access token client-side. The backend `/api/auth/logout` only revokes refresh tokens.\n\n**End-to-end flow**\n1. `Auth / Login` as the bootstrap super admin → access token saved.\n2. `Super Admin / Create Nursery` → saves `{{nurseryId}}`.\n3. `Super Admin / Invite Admin` for that nursery → saves `{{inviteToken}}`.\n4. `Auth / Accept Invite` (the invited admin sets a password and is immediately logged in).\n5. The admin runs `Admin / Nursery / Update Nursery` → `Update Geofence` → `Admin / Rooms / Create Room` → `Admin / Invites / Create Invite` to onboard teachers and parents.\n\n**Bootstrap super admin (dev defaults from application.yml)**\n- email: `admin@nms.local`\n- password: `ChangeMe!123`\n\n**Roles**: `SUPER_ADMIN`, `ADMIN`, `TEACHER`, `PARENT`. **Locales**: `EN`, `AR`.",
+    "description": "Postman collection for the Nursery Management System backend (Spring Boot).\n\n**Base URL** is controlled by the `baseUrl` variable (default `http://localhost:8080`; set it to `https://nursery-be.onrender.com` for the deployed API).\n\n**Two-layer SaaS model**\n- **Super Admin** (platform owner): provisions nurseries and invites their first admin. Not attached to any nursery. The bootstrap account is a super admin.\n- **Admin** (nursery manager): scoped to one nursery. Completes nursery setup, creates rooms, invites teachers/parents.\n- **Teacher / Parent**: invited by an admin.\n\n**Admin onboarding (current flow)**\n1. `Auth / Login` as the bootstrap super admin -> access token saved.\n2. `Super Admin / Invite Admin (One-Call)` with just `email` + `fullName` -> creates a **bare nursery** (id only), a disabled ADMIN linked to it, a 48h invite, and **auto-emails** the invite link. Saves `{{inviteToken}}` + `{{userId}}`.\n3. The invite link deep-links into the app. `Auth / Validate Invite` checks the token (VALID / EXPIRED / USED / INVALID) without consuming it.\n4. `Auth / Accept Invite` sets the password, activates the account, and logs the admin in.\n5. The admin completes setup: `Admin / Nursery / Update Nursery` (name, hours, **working days**) -> `Upload Logo` -> `Update Geofence`, then `Rooms` and teacher/parent invites.\n6. If the invite expired: `Auth / Request Reactivation` (from the expired screen) emails the super-admins, who call `Super Admin / Resend Invite` to issue a fresh link.\n\n**Auth model**\n- Access tokens (JWT) carry `sub`, `email`, `role`. Revocation is server-side via `Admin / Users / Disable User`.\n- `Auth / Accept Invite` and `Auth / Login` both return a token pair.\n\n**Email**: invites are sent via SMTP (Brevo). Configure `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, `MAIL_FROM_NAME`, and `APP_INVITE_LINK_BASE_URL` as env vars. If mail is unconfigured the invite still succeeds and the raw `token` is returned in the response.\n\n**Bootstrap super admin (dev defaults from application.yml)**\n- email: `shehab4111995@gmail.com`\n- password: `ChangeMe!123`\n\n**Roles**: `SUPER_ADMIN`, `ADMIN`, `TEACHER`, `PARENT`. **Locales**: `EN`, `AR`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
     "type": "bearer",
     "bearer": [
-      { "key": "token", "value": "{{accessToken}}", "type": "string" }
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
     ]
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
-    { "key": "accessToken", "value": "", "type": "string" },
-    { "key": "refreshToken", "value": "", "type": "string" },
-    { "key": "inviteToken", "value": "", "type": "string" },
-    { "key": "passwordResetToken", "value": "", "type": "string" },
-    { "key": "userId", "value": "", "type": "string" },
-    { "key": "roomId", "value": "", "type": "string" },
-    { "key": "nurseryId", "value": "", "type": "string" },
-    { "key": "teacherId", "value": "", "type": "string" },
-    { "key": "childId", "value": "", "type": "string" },
-    { "key": "guardianId", "value": "", "type": "string" },
-    { "key": "pickupId", "value": "", "type": "string" },
-    { "key": "emergencyContactId", "value": "", "type": "string" },
-    { "key": "dailyLogId", "value": "", "type": "string" },
-    { "key": "logEntryId", "value": "", "type": "string" },
-    { "key": "attendanceEventId", "value": "", "type": "string" },
-    { "key": "incidentId", "value": "", "type": "string" },
-    { "key": "mediaId", "value": "", "type": "string" },
-    { "key": "announcementId", "value": "", "type": "string" },
-    { "key": "eventId", "value": "", "type": "string" },
-    { "key": "notificationId", "value": "", "type": "string" },
-    { "key": "chatThreadId", "value": "", "type": "string" },
-    { "key": "chatMessageId", "value": "", "type": "string" },
-    { "key": "chatParticipantId", "value": "", "type": "string" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "inviteToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "passwordResetToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "roomId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "nurseryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "teacherId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "childId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "guardianId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pickupId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "emergencyContactId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dailyLogId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "logEntryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attendanceEventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incidentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mediaId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "announcementId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "eventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "notificationId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "chatThreadId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "chatMessageId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "chatParticipantId",
+      "value": "",
+      "type": "string"
+    }
   ],
   "item": [
     {
@@ -47,12 +147,21 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/super-admin/nurseries",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "super-admin", "nurseries"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "nurseries"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -82,8 +191,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/super-admin/nurseries",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "super-admin", "nurseries"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "nurseries"
+              ]
             },
             "description": "Returns every nursery on the platform, ordered by name. Super-admin-only."
           }
@@ -95,8 +210,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "super-admin", "nurseries", "{{nurseryId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "nurseries",
+                "{{nurseryId}}"
+              ]
             },
             "description": "Fetch a single nursery by id. Returns 404 if not found."
           }
@@ -106,12 +228,22 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "super-admin", "nurseries", "{{nurseryId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "nurseries",
+                "{{nurseryId}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -125,12 +257,23 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}/admin-invites",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "super-admin", "nurseries", "{{nurseryId}}", "admin-invites"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "nurseries",
+                "{{nurseryId}}",
+                "admin-invites"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -153,6 +296,84 @@
               }
             }
           ]
+        },
+        {
+          "name": "Invite Admin (One-Call)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/admin-invites",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "admin-invites"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nour@sunshine.local\",\n  \"fullName\": \"Nour Owner\"\n}"
+            },
+            "description": "**Preferred way to onboard a new nursery's admin.** In a single call this:\n1. creates a **bare nursery** (id only - no name/logo/hours yet),\n2. creates a disabled `ADMIN` user attached to that nursery,\n3. issues a 48h invite token, and\n4. **emails the invite link** to the admin (via Brevo SMTP).\n\nNo `nurseryId` is needed - the nursery is created in the background. The admin fills in the nursery profile (name, logo, working days, hours, geofence) after accepting.\n\n**Body**\n- `email` (required, valid email, max 254)\n- `fullName` (required, max 200)\n\n**Response (201)**: `{ inviteId, userId, email, role, token, expiresAt }`. The `token` is also emailed as a deep link; it is returned here too for testing. The test script saves `{{inviteToken}}` and `{{userId}}`.\n\nReturns 409 if the email already exists in the system."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.token) pm.collectionVariables.set('inviteToken', json.token);",
+                  "  if (json.userId) pm.collectionVariables.set('userId', json.userId);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resend Invite (Reactivate Admin)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/admin-invites/{{userId}}/resend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "admin-invites",
+                "{{userId}}",
+                "resend"
+              ]
+            },
+            "description": "Reactivate a pending admin whose invite expired (or who requested a new link via `Auth / Request Reactivation`). Issues a **fresh 48h invite token** for the existing disabled user and re-emails the link.\n\n`{{userId}}` is the invited admin's user id (saved by `Invite Admin (One-Call)`).\n\n**Response (201)**: same shape as the invite; the test script saves the new `{{inviteToken}}`.\n\nErrors: 404 (user not found), 400 (user is not an admin), 409 (admin already activated)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.token) pm.collectionVariables.set('inviteToken', json.token);",
+                  "}"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -162,21 +383,32 @@
         {
           "name": "Login",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@nms.local\",\n  \"password\": \"ChangeMe!123\"\n}"
+              "raw": "{\n  \"email\": \"shehab4111995@gmail.com\",\n  \"password\": \"ChangeMe!123\"\n}"
             },
-            "description": "Authenticate with email + password. Used by **all roles** (super admin, admin, teacher, parent). The role embedded in the returned JWT determines which endpoints the user can access.\n\nReturns:\n- `accessToken` — JWT, no expiry. Send as `Authorization: Bearer ...` on protected endpoints.\n- `refreshToken` — opaque, 14-day TTL. Optional under the current model.\n- `tokenType` — `Bearer`.\n- `expiresInSeconds` — informational only; access tokens do not expire on time.\n\nFails with 401 if the user is disabled or the credentials are wrong, and with a friendly message if the account exists but has not yet accepted its invite (no password set).\n\n**Bootstrap super admin (dev)**: `admin@nms.local` / `ChangeMe!123`."
+            "description": "Authenticate with email + password. Used by **all roles** (super admin, admin, teacher, parent). The role embedded in the returned JWT determines which endpoints the user can access.\n\nReturns:\n- `accessToken` — JWT, no expiry. Send as `Authorization: Bearer ...` on protected endpoints.\n- `refreshToken` — opaque, 14-day TTL. Optional under the current model.\n- `tokenType` — `Bearer`.\n- `expiresInSeconds` — informational only; access tokens do not expire on time.\n\nFails with 401 if the user is disabled or the credentials are wrong, and with a friendly message if the account exists but has not yet accepted its invite (no password set).\n\n**Bootstrap super admin (dev)**: `shehab4111995@gmail.com` / `ChangeMe!123`."
           },
           "event": [
             {
@@ -197,15 +429,26 @@
         {
           "name": "Refresh",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/auth/refresh",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "refresh"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -236,8 +479,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/auth/logout",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "logout"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
             },
             "description": "Revokes the current user's refresh tokens. Requires a valid access token.\n\n**Note**: this does NOT invalidate the access token itself (JWT is stateless and never expires). For real revocation, use `Admin / Disable User` or have the frontend discard the token."
           }
@@ -249,8 +498,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "me"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
             },
             "description": "Returns the currently authenticated user's profile: `id`, `email`, `fullName`, `role`, `locale`. Useful for the frontend to render role-aware UI without decoding the JWT."
           }
@@ -258,15 +513,26 @@
         {
           "name": "Accept Invite",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/auth/accept-invite",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "accept-invite"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "accept-invite"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -291,21 +557,93 @@
           ]
         },
         {
-          "name": "Forgot Password",
+          "name": "Validate Invite",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/invite?token={{inviteToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "invite"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{inviteToken}}",
+                  "description": "Raw invite token from the deep link"
+                }
+              ]
+            },
+            "description": "Read-only check of an invite token carried by the deep link - powers the app's 'valid invitation' vs 'invitation expired' screens. **Does not consume the invite.**\n\n**Response (200)** always returns a `status`:\n- `VALID` -> show the set-password screen (response also has `email`, `fullName`, `role`, `expiresAt`).\n- `EXPIRED` / `USED` -> show the expired screen (identity fields still returned).\n- `INVALID` -> unknown token; identity fields are null.\n\nPublic endpoint (no auth)."
+          }
+        },
+        {
+          "name": "Request Reactivation",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/auth/forgot-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "forgot-password"]
+              "raw": "{{baseUrl}}/api/auth/invite/reactivation-request",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "invite",
+                "reactivation-request"
+              ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@nms.local\"\n}"
+              "raw": "{\n  \"email\": \"nour@sunshine.local\",\n  \"message\": \"My invitation link expired, please send a new one.\"\n}"
+            },
+            "description": "Sent from the app's 'invitation expired' screen when the invitee taps **Contact Admin**. Emails **all super-admins** that this person is asking to be re-invited, so a super-admin can call `Super Admin / Resend Invite`.\n\n**Body**\n- `email` (required)\n- `message` (optional, max 1000)\n\nAlways returns **204** - even for unknown emails - to avoid leaking who has a pending invite. Public endpoint (no auth)."
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/forgot-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "forgot-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"shehab4111995@gmail.com\"\n}"
             },
             "description": "Initiates the password reset flow. Always returns 204 — even for unknown emails — to avoid email enumeration.\n\nIn dev, the generated token is logged to the server console (look for `Password reset token issued for ...`). Copy it into the `passwordResetToken` collection variable, then call `Auth / Reset Password`."
           }
@@ -313,15 +651,26 @@
         {
           "name": "Reset Password",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/auth/reset-password",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "reset-password"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "reset-password"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -346,8 +695,14 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/nursery",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "nursery"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "nursery"
+                  ]
                 },
                 "description": "Returns the current admin's nursery: id, name, logo, timezone, opening hours, geofence center+radius. Useful as the first call after login to populate the admin dashboard header and settings."
               }
@@ -357,18 +712,27 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/nursery",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "nursery"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "nursery"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Sunshine Nursery\",\n  \"logoUrl\": \"https://cdn.example.com/logo.png\",\n  \"timezone\": \"Africa/Cairo\",\n  \"hoursStart\": \"08:00:00\",\n  \"hoursEnd\": \"17:00:00\"\n}"
+                  "raw": "{\n  \"name\": \"Sunshine Nursery\",\n  \"logoUrl\": \"https://cdn.example.com/logo.png\",\n  \"timezone\": \"Africa/Cairo\",\n  \"hoursStart\": \"08:00:00\",\n  \"hoursEnd\": \"17:00:00\",\n  \"workingDays\": [\"MONDAY\", \"TUESDAY\", \"WEDNESDAY\", \"THURSDAY\", \"FRIDAY\"]\n}"
                 },
-                "description": "Partial update of nursery profile. Any field may be omitted; only provided fields are changed.\n\n`hoursStart` / `hoursEnd` are `LocalTime` (`HH:mm:ss`). End must be strictly after start (returns 400 otherwise).\n\nThe configured hours drive the **out-of-hours indicator** in chat (PRD §6.1)."
+                "description": "Partial update of the nursery profile. Any field may be omitted; only provided fields change.\n\n- `hoursStart` / `hoursEnd` are `LocalTime` (`HH:mm:ss`); end must be strictly after start (400 otherwise). These are the single open/close times that apply to every working day.\n- `workingDays` is the set of days the nursery operates - any of `MONDAY`,`TUESDAY`,`WEDNESDAY`,`THURSDAY`,`FRIDAY`,`SATURDAY`,`SUNDAY`. Sending the field replaces the whole set.\n- `logoUrl` can be set directly, but prefer **Upload Logo** to upload a file and have the URL set for you.\n\nThe configured hours drive the out-of-hours indicator in chat."
               }
             },
             {
@@ -376,18 +740,80 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/nursery/geofence",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "nursery", "geofence"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "nursery",
+                    "geofence"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"lat\": 30.0444,\n  \"lng\": 31.2357,\n  \"radiusM\": 100\n}"
                 },
                 "description": "Sets the nursery geofence center (lat/lng) and radius in metres (10–2000). Used by parent check-in to enable/disable the check-in button (PRD §6.1 attendance).\n\nDefaults from the PRD: radius 100m, +10m drift tolerance applied at check-in time."
+              }
+            },
+            {
+              "name": "Upload Logo",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/nursery/logo",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "nursery",
+                    "logo"
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": [],
+                      "description": "JPEG/PNG/WEBP, max 5 MB"
+                    }
+                  ]
+                },
+                "description": "Upload the nursery logo (multipart `file`). Accepts `image/jpeg`, `image/png`, `image/webp`, max 5 MB; replaces any existing logo.\n\n**Response (200)** is the nursery with `logoUrl` set to `/api/files/nursery/{id}/logo`. The app loads that URL (with an auth header) to show the logo on the home page.\n\nErrors: 400 (no file), 413 (>5 MB), 415 (wrong content type)."
+              }
+            },
+            {
+              "name": "Download Logo",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/files/nursery/{{nurseryId}}/logo",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "files",
+                    "nursery",
+                    "{{nurseryId}}",
+                    "logo"
+                  ]
+                },
+                "description": "Stream the nursery logo. Requires auth; any user (ADMIN/TEACHER/PARENT) attached to that nursery can load it. Returns 404 if no logo is set or the caller belongs to a different nursery."
               }
             }
           ]
@@ -401,12 +827,21 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -436,10 +871,20 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms?includeArchived=false",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms"
+                  ],
                   "query": [
-                    { "key": "includeArchived", "value": "false", "description": "Set true to include soft-archived rooms" }
+                    {
+                      "key": "includeArchived",
+                      "value": "false",
+                      "description": "Set true to include soft-archived rooms"
+                    }
                   ]
                 },
                 "description": "List rooms in the current nursery, ordered by name. Set `includeArchived=true` to include soft-archived rooms; defaults to active only."
@@ -452,8 +897,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms", "{{roomId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms",
+                    "{{roomId}}"
+                  ]
                 },
                 "description": "Fetch a single room by id. Returns 404 if the room does not exist or belongs to a different nursery (cross-tenant access is treated as not-found)."
               }
@@ -463,12 +915,22 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms", "{{roomId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms",
+                    "{{roomId}}"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -484,8 +946,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms", "{{roomId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms",
+                    "{{roomId}}"
+                  ]
                 },
                 "description": "Soft-archive the room (sets `archivedAt = now`). The row is preserved so historical references (children, daily logs, attendance) remain intact. Use **Restore Room** to bring it back."
               }
@@ -497,8 +966,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/restore",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms", "{{roomId}}", "restore"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms",
+                    "{{roomId}}",
+                    "restore"
+                  ]
                 },
                 "description": "Un-archive a previously archived room (clears `archivedAt`). Fails with 409 if a different active room now uses the same name — rename the archived room first or rename the active one."
               }
@@ -516,8 +993,17 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/teachers/{{teacherId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms", "{{roomId}}", "teachers", "{{teacherId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms",
+                    "{{roomId}}",
+                    "teachers",
+                    "{{teacherId}}"
+                  ]
                 },
                 "description": "Attach an existing TEACHER user to a room. Returns 201, 404 if room/teacher not in this nursery, 400 if the user is not a teacher, 409 if already assigned or the room is archived."
               }
@@ -529,8 +1015,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/teachers",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms", "{{roomId}}", "teachers"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms",
+                    "{{roomId}}",
+                    "teachers"
+                  ]
                 },
                 "description": "List teachers assigned to a specific room, ordered by assignment date."
               }
@@ -542,8 +1036,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/teachers/{{teacherId}}/rooms",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "teachers", "{{teacherId}}", "rooms"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "teachers",
+                    "{{teacherId}}",
+                    "rooms"
+                  ]
                 },
                 "description": "List rooms a specific teacher is assigned to."
               }
@@ -555,8 +1057,17 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/teachers/{{teacherId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms", "{{roomId}}", "teachers", "{{teacherId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms",
+                    "{{roomId}}",
+                    "teachers",
+                    "{{teacherId}}"
+                  ]
                 },
                 "description": "Remove a teacher from a room. Returns 204 on success, 404 if no such assignment."
               }
@@ -572,12 +1083,21 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -607,11 +1127,26 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children?includeUnenrolled=false",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children"
+                  ],
                   "query": [
-                    { "key": "includeUnenrolled", "value": "false", "description": "Set true to include unenrolled children" },
-                    { "key": "roomId", "value": "{{roomId}}", "disabled": true, "description": "Filter by room" }
+                    {
+                      "key": "includeUnenrolled",
+                      "value": "false",
+                      "description": "Set true to include unenrolled children"
+                    },
+                    {
+                      "key": "roomId",
+                      "value": "{{roomId}}",
+                      "disabled": true,
+                      "description": "Filter by room"
+                    }
                   ]
                 },
                 "description": "List children in the current nursery, ordered by full name. Optional query params: `roomId` (filter by room), `includeUnenrolled` (default false)."
@@ -624,8 +1159,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}"
+                  ]
                 },
                 "description": "Fetch a single child by id. Returns 404 if the child does not exist or belongs to another nursery."
               }
@@ -635,12 +1177,22 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -654,12 +1206,23 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/room",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "room"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "room"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -675,8 +1238,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/unenroll",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "unenroll"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "unenroll"
+                  ]
                 },
                 "description": "Set `enrollmentStatus = UNENROLLED` and record `unenrolledAt`. Hides the child from parent self-service immediately (PRD §6.3). Guardian links remain in DB for historical reference but no longer expose data."
               }
@@ -688,8 +1259,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/restore",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "restore"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "restore"
+                  ]
                 },
                 "description": "Re-enroll a previously unenrolled child (clears `unenrolledAt`). Parent access via existing guardian links becomes visible again."
               }
@@ -701,13 +1280,26 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/photo",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "photo"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "photo"
+                  ]
                 },
                 "body": {
                   "mode": "formdata",
                   "formdata": [
-                    { "key": "file", "type": "file", "src": [], "description": "JPEG/PNG/WEBP, max 5 MB" }
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": [],
+                      "description": "JPEG/PNG/WEBP, max 5 MB"
+                    }
                   ]
                 },
                 "description": "Upload a child's profile photo (multipart). Accepts `image/jpeg`, `image/png`, or `image/webp`, max 5 MB. Replaces any existing photo.\n\n**Storage** is local disk for dev (`./uploads/children/{id}.{ext}` under the configured root). The returned child shape has `photoUrl` set to `/api/files/children/{id}/photo` — call that with an auth header to download bytes.\n\nErrors: 400 (no file), 413 (>5 MB), 415 (wrong content type)."
@@ -720,8 +1312,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/photo",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "photo"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "photo"
+                  ]
                 },
                 "description": "Remove the child's profile photo from disk and clear `photoKey`. Returns 204 even if no photo was set."
               }
@@ -733,8 +1333,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/files/children/{{childId}}/photo",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "files", "children", "{{childId}}", "photo"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "files",
+                    "children",
+                    "{{childId}}",
+                    "photo"
+                  ]
                 },
                 "description": "Stream the child's photo. Requires auth. Access: ADMIN/TEACHER in the same nursery, OR a PARENT with an active guardian link to this child. Anyone else gets 404."
               }
@@ -744,12 +1352,23 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/guardians",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "guardians"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "guardians"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -780,8 +1399,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/guardians",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "guardians"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "guardians"
+                  ]
                 },
                 "description": "List all guardians linked to a child (ordered by link creation time)."
               }
@@ -793,8 +1420,17 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/guardians/{{guardianId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "guardians", "{{guardianId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "guardians",
+                    "{{guardianId}}"
+                  ]
                 },
                 "description": "Remove the guardian-child link. The parent user account is NOT deleted."
               }
@@ -804,12 +1440,23 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/pickups",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "pickups"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "pickups"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -839,8 +1486,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/pickups",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "pickups"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "pickups"
+                  ]
                 }
               }
             },
@@ -849,12 +1504,24 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/pickups/{{pickupId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "pickups", "{{pickupId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "pickups",
+                    "{{pickupId}}"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -870,8 +1537,17 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/pickups/{{pickupId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "pickups", "{{pickupId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "pickups",
+                    "{{pickupId}}"
+                  ]
                 }
               }
             },
@@ -880,12 +1556,23 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/emergency-contacts",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "emergency-contacts"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "emergency-contacts"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -915,8 +1602,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/emergency-contacts",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "emergency-contacts"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "emergency-contacts"
+                  ]
                 }
               }
             },
@@ -925,12 +1620,24 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/emergency-contacts/{{emergencyContactId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "emergency-contacts", "{{emergencyContactId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "emergency-contacts",
+                    "{{emergencyContactId}}"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -945,8 +1652,17 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/emergency-contacts/{{emergencyContactId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "emergency-contacts", "{{emergencyContactId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "emergency-contacts",
+                    "{{emergencyContactId}}"
+                  ]
                 }
               }
             }
@@ -961,12 +1677,21 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/invites",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "invites"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "invites"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1003,8 +1728,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/users/{{userId}}/disable",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "users", "{{userId}}", "disable"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "{{userId}}",
+                    "disable"
+                  ]
                 },
                 "description": "Disable a user account. Requires role ADMIN.\n\n**Effect**: sets `enabled = false` and revokes all of the user's refresh tokens. The next API call from that user with their existing access token will fail (401), since `JwtAuthFilter` checks `enabled` on every request.\n\nReturns 400 if you try to disable your own account."
               }
@@ -1016,8 +1749,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/users/{{userId}}/enable",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "users", "{{userId}}", "enable"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "{{userId}}",
+                    "enable"
+                  ]
                 },
                 "description": "Re-enable a previously disabled user account. Requires role ADMIN.\n\nThe user must log in again to obtain a new token (their refresh tokens were revoked at disable time)."
               }
@@ -1035,8 +1776,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/daily-logs",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "daily-logs"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "daily-logs"
+                  ]
                 },
                 "description": "Summaries of every daily log for a specific child, newest date first. Each row has `totalEntries` (DRAFT + PUBLISHED) and `publishedEntries` counts."
               }
@@ -1048,8 +1797,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/daily-logs/{{dailyLogId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "daily-logs", "{{dailyLogId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "daily-logs",
+                    "{{dailyLogId}}"
+                  ]
                 },
                 "description": "Full daily log with all entries (DRAFT + PUBLISHED). Cross-tenant access returns 404."
               }
@@ -1065,12 +1821,24 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/attendance/check-in",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "attendance", "check-in"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "attendance",
+                    "check-in"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1084,12 +1852,24 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/attendance/check-out",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "attendance", "check-out"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "attendance",
+                    "check-out"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1105,11 +1885,26 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/attendance?date=2026-05-22",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "attendance"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "attendance"
+                  ],
                   "query": [
-                    { "key": "date", "value": "2026-05-22", "description": "ISO date (interpreted in the nursery's timezone)" },
-                    { "key": "roomId", "value": "{{roomId}}", "disabled": true, "description": "Optional — filter to a single room" }
+                    {
+                      "key": "date",
+                      "value": "2026-05-22",
+                      "description": "ISO date (interpreted in the nursery's timezone)"
+                    },
+                    {
+                      "key": "roomId",
+                      "value": "{{roomId}}",
+                      "disabled": true,
+                      "description": "Optional — filter to a single room"
+                    }
                   ]
                 },
                 "description": "Returns every enrolled child in the nursery with their attendance status for the requested date: `NOT_ARRIVED`, `PRESENT`, or `CHECKED_OUT`. Each row also carries `lastCheckInAt` / `lastCheckOutAt` and the raw event list for that day. Filter to a single room with `roomId`."
@@ -1122,11 +1917,28 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/attendance/history?from=2026-05-01&to=2026-05-22",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "attendance", "history"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "attendance",
+                    "history"
+                  ],
                   "query": [
-                    { "key": "from", "value": "2026-05-01", "description": "ISO date inclusive" },
-                    { "key": "to", "value": "2026-05-22", "description": "ISO date inclusive" }
+                    {
+                      "key": "from",
+                      "value": "2026-05-01",
+                      "description": "ISO date inclusive"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-05-22",
+                      "description": "ISO date inclusive"
+                    }
                   ]
                 },
                 "description": "Day-by-day summary for one child between `from` and `to` (inclusive). Useful for the admin's attendance history page in Figma. The FE can compute weekend/absent rendering from the response."
@@ -1143,12 +1955,23 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/incidents",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "incidents"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "incidents"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1176,12 +1999,22 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/incidents/{{incidentId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "incidents", "{{incidentId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "incidents",
+                    "{{incidentId}}"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1197,8 +2030,14 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/incidents",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "incidents"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "incidents"
+                  ]
                 },
                 "description": "Every incident in the nursery, newest first. Each row has total linked guardians and acknowledged count for quick sorting on the admin incident log."
               }
@@ -1210,8 +2049,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/incidents/{{incidentId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "incidents", "{{incidentId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "incidents",
+                    "{{incidentId}}"
+                  ]
                 }
               }
             },
@@ -1222,8 +2068,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/incidents",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "incidents"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "incidents"
+                  ]
                 }
               }
             },
@@ -1234,8 +2088,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/incidents/{{incidentId}}/acknowledgments",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "incidents", "{{incidentId}}", "acknowledgments"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "incidents",
+                    "{{incidentId}}",
+                    "acknowledgments"
+                  ]
                 },
                 "description": "Per-guardian acknowledgment status for an incident. One row per current guardian of the child with `acknowledged: true/false` and `acknowledgedAt`. Drives the Figma 'seen / not seen' chip."
               }
@@ -1253,14 +2115,32 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/media",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "media"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "media"
+                  ]
                 },
                 "body": {
                   "mode": "formdata",
                   "formdata": [
-                    { "key": "files", "type": "file", "src": [], "description": "One or more photo/video files (multi-select)" },
-                    { "key": "caption", "type": "text", "value": "Lunch at the Sunflower room", "description": "Optional caption applied to all files in this upload" }
+                    {
+                      "key": "files",
+                      "type": "file",
+                      "src": [],
+                      "description": "One or more photo/video files (multi-select)"
+                    },
+                    {
+                      "key": "caption",
+                      "type": "text",
+                      "value": "Lunch at the Sunflower room",
+                      "description": "Optional caption applied to all files in this upload"
+                    }
                   ]
                 },
                 "description": "Bulk upload — pass multiple `files` parts. Returns `{uploaded:[...], failed:[{filename, reason}]}`. Per-file failures are reported individually; the upload is **not all-or-nothing** (PRD: lose 4 photos because file #5 was HEIC would be bad UX).\n\nThe test script saves the first uploaded id into `{{mediaId}}` so subsequent requests can target it."
@@ -1289,14 +2169,32 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/media",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms", "{{roomId}}", "media"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms",
+                    "{{roomId}}",
+                    "media"
+                  ]
                 },
                 "body": {
                   "mode": "formdata",
                   "formdata": [
-                    { "key": "files", "type": "file", "src": [], "description": "Photo/video files" },
-                    { "key": "caption", "type": "text", "value": "Room field trip", "description": "Optional shared caption" }
+                    {
+                      "key": "files",
+                      "type": "file",
+                      "src": [],
+                      "description": "Photo/video files"
+                    },
+                    {
+                      "key": "caption",
+                      "type": "text",
+                      "value": "Room field trip",
+                      "description": "Optional shared caption"
+                    }
                   ]
                 },
                 "description": "Room-scoped upload. Visible to every parent whose enrolled child currently belongs to this room (later joiners see historical media; earlier leavers lose access)."
@@ -1309,8 +2207,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/media/{{mediaId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "media", "{{mediaId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "media",
+                    "{{mediaId}}"
+                  ]
                 },
                 "description": "Soft delete (sets `deleted_at`). Admins can delete any media anytime; teachers are restricted to their own uploads within 24 h."
               }
@@ -1322,11 +2227,29 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/children/{{childId}}/media",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "children", "{{childId}}", "media"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "children",
+                    "{{childId}}",
+                    "media"
+                  ],
                   "query": [
-                    { "key": "from", "value": "2026-05-01", "disabled": true, "description": "Optional ISO date inclusive" },
-                    { "key": "to", "value": "2026-05-22", "disabled": true, "description": "Optional ISO date inclusive" }
+                    {
+                      "key": "from",
+                      "value": "2026-05-01",
+                      "disabled": true,
+                      "description": "Optional ISO date inclusive"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-05-22",
+                      "disabled": true,
+                      "description": "Optional ISO date inclusive"
+                    }
                   ]
                 },
                 "description": "Child-scoped media (not the parent's full gallery — admin sees just media where `child_id == :childId`)."
@@ -1339,10 +2262,23 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/media",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "rooms", "{{roomId}}", "media"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms",
+                    "{{roomId}}",
+                    "media"
+                  ],
                   "query": [
-                    { "key": "date", "value": "2026-05-22", "disabled": true, "description": "Optional ISO date" }
+                    {
+                      "key": "date",
+                      "value": "2026-05-22",
+                      "disabled": true,
+                      "description": "Optional ISO date"
+                    }
                   ]
                 }
               }
@@ -1354,11 +2290,27 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/media",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "media"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "media"
+                  ],
                   "query": [
-                    { "key": "from", "value": "2026-05-01", "disabled": true, "description": "Optional ISO date inclusive" },
-                    { "key": "to", "value": "2026-05-22", "disabled": true, "description": "Optional ISO date inclusive" }
+                    {
+                      "key": "from",
+                      "value": "2026-05-01",
+                      "disabled": true,
+                      "description": "Optional ISO date inclusive"
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-05-22",
+                      "disabled": true,
+                      "description": "Optional ISO date inclusive"
+                    }
                   ]
                 },
                 "description": "All non-deleted media in the nursery, newest first. Useful for admin oversight."
@@ -1375,12 +2327,21 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/announcements",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "announcements"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "announcements"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1408,12 +2369,22 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/announcements/{{announcementId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "announcements", "{{announcementId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "announcements",
+                    "{{announcementId}}"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1429,8 +2400,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/announcements/{{announcementId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "announcements", "{{announcementId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "announcements",
+                    "{{announcementId}}"
+                  ]
                 },
                 "description": "Hard delete (no retention rule like incidents). Cascades the announcement_links and announcement_attachments rows but does NOT delete the underlying media."
               }
@@ -1442,10 +2420,21 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/announcements",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "announcements"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "announcements"
+                  ],
                   "query": [
-                    { "key": "roomId", "value": "{{roomId}}", "disabled": true, "description": "Optional — filter to a single room" }
+                    {
+                      "key": "roomId",
+                      "value": "{{roomId}}",
+                      "disabled": true,
+                      "description": "Optional — filter to a single room"
+                    }
                   ]
                 },
                 "description": "All announcements in the nursery, newest first. PRD §6.3 'Filter announcements by room' satisfied by the optional roomId query param."
@@ -1458,8 +2447,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/announcements/{{announcementId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "announcements", "{{announcementId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "announcements",
+                    "{{announcementId}}"
+                  ]
                 }
               }
             },
@@ -1470,8 +2466,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/announcements/{{announcementId}}/seen-by",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "announcements", "{{announcementId}}", "seen-by"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "announcements",
+                    "{{announcementId}}",
+                    "seen-by"
+                  ]
                 },
                 "description": "Per-user breakdown of who has opened this announcement (PRD §6.3 'Seen-by count per announcement'). One row per user that's marked it seen, with `seenAt` timestamp. The list endpoint already returns just the `seenCount` for quick sorting."
               }
@@ -1487,12 +2491,21 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/events",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "events"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1520,12 +2533,22 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/events/{{eventId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "events", "{{eventId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{eventId}}"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1540,8 +2563,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/events/{{eventId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "events", "{{eventId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{eventId}}"
+                  ]
                 }
               }
             },
@@ -1552,10 +2582,20 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/events?upcoming=false",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "events"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ],
                   "query": [
-                    { "key": "upcoming", "value": "false", "description": "Set true to only return events with `startsAt >= now`" }
+                    {
+                      "key": "upcoming",
+                      "value": "false",
+                      "description": "Set true to only return events with `startsAt >= now`"
+                    }
                   ]
                 }
               }
@@ -1567,8 +2607,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/admin/events/{{eventId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "admin", "events", "{{eventId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{eventId}}"
+                  ]
                 }
               }
             }
@@ -1588,12 +2635,23 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/log-entries",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "children", "{{childId}}", "log-entries"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "children",
+                    "{{childId}}",
+                    "log-entries"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1622,12 +2680,22 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/log-entries/{{logEntryId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "log-entries", "{{logEntryId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "log-entries",
+                    "{{logEntryId}}"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1643,8 +2711,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/log-entries/{{logEntryId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "log-entries", "{{logEntryId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "log-entries",
+                    "{{logEntryId}}"
+                  ]
                 },
                 "description": "Permanently remove a log entry. Any teacher assigned to the child's room may delete (PRD doesn't restrict to original author)."
               }
@@ -1656,8 +2731,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/log-entries/{{logEntryId}}/publish",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "log-entries", "{{logEntryId}}", "publish"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "log-entries",
+                    "{{logEntryId}}",
+                    "publish"
+                  ]
                 },
                 "description": "Mark a single entry as published. Fires `DailyLogEntriesPublishedEvent` (event payload includes the entry id, log id, child id). No-op if already published."
               }
@@ -1669,8 +2752,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/log-entries/{{logEntryId}}/unpublish",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "log-entries", "{{logEntryId}}", "unpublish"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "log-entries",
+                    "{{logEntryId}}",
+                    "unpublish"
+                  ]
                 },
                 "description": "Revert a published entry to DRAFT. Parent loses access immediately. No event fired."
               }
@@ -1680,12 +2771,23 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/daily-logs/{{dailyLogId}}/publish",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "daily-logs", "{{dailyLogId}}", "publish"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "daily-logs",
+                    "{{dailyLogId}}",
+                    "publish"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1701,8 +2803,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/daily-logs/{{dailyLogId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "daily-logs", "{{dailyLogId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "daily-logs",
+                    "{{dailyLogId}}"
+                  ]
                 },
                 "description": "Full log with all entries (DRAFT + PUBLISHED). Teacher must be assigned to the child's current room."
               }
@@ -1714,10 +2823,22 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/daily-logs?date=2026-05-22",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "children", "{{childId}}", "daily-logs"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "children",
+                    "{{childId}}",
+                    "daily-logs"
+                  ],
                   "query": [
-                    { "key": "date", "value": "2026-05-22", "description": "ISO date" }
+                    {
+                      "key": "date",
+                      "value": "2026-05-22",
+                      "description": "ISO date"
+                    }
                   ]
                 },
                 "description": "Fetch the daily log for a specific (child, date). Returns 404 if no log exists yet (i.e. teacher hasn't added any entries that day)."
@@ -1730,10 +2851,22 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/daily-logs?date=2026-05-22",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "rooms", "{{roomId}}", "daily-logs"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "rooms",
+                    "{{roomId}}",
+                    "daily-logs"
+                  ],
                   "query": [
-                    { "key": "date", "value": "2026-05-22", "description": "ISO date" }
+                    {
+                      "key": "date",
+                      "value": "2026-05-22",
+                      "description": "ISO date"
+                    }
                   ]
                 },
                 "description": "Summaries for every child in the teacher's room for a given date. Each entry shows total + published counts so the teacher can spot drafts that still need publishing."
@@ -1750,12 +2883,24 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/attendance/check-in",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "children", "{{childId}}", "attendance", "check-in"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "children",
+                    "{{childId}}",
+                    "attendance",
+                    "check-in"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1769,12 +2914,24 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/attendance/check-out",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "children", "{{childId}}", "attendance", "check-out"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "children",
+                    "{{childId}}",
+                    "attendance",
+                    "check-out"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1790,10 +2947,22 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/attendance?date=2026-05-22",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "rooms", "{{roomId}}", "attendance"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "rooms",
+                    "{{roomId}}",
+                    "attendance"
+                  ],
                   "query": [
-                    { "key": "date", "value": "2026-05-22", "description": "ISO date" }
+                    {
+                      "key": "date",
+                      "value": "2026-05-22",
+                      "description": "ISO date"
+                    }
                   ]
                 },
                 "description": "Live attendance roster for the room on the given date. One row per enrolled child with `status`, `lastCheckInAt`, `lastCheckOutAt`, and the full event timeline. Backs the teacher's 'all / present / not arrived' filter from the Figma."
@@ -1810,12 +2979,23 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/incidents",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "children", "{{childId}}", "incidents"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "children",
+                    "{{childId}}",
+                    "incidents"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1843,12 +3023,22 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/incidents/{{incidentId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "incidents", "{{incidentId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "incidents",
+                    "{{incidentId}}"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -1864,8 +3054,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/incidents/{{incidentId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "incidents", "{{incidentId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "incidents",
+                    "{{incidentId}}"
+                  ]
                 }
               }
             },
@@ -1876,8 +3073,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/incidents",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "children", "{{childId}}", "incidents"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "children",
+                    "{{childId}}",
+                    "incidents"
+                  ]
                 }
               }
             },
@@ -1888,8 +3093,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/incidents",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "rooms", "{{roomId}}", "incidents"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "rooms",
+                    "{{roomId}}",
+                    "incidents"
+                  ]
                 }
               }
             },
@@ -1900,8 +3113,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/incidents/{{incidentId}}/acknowledgments",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "incidents", "{{incidentId}}", "acknowledgments"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "incidents",
+                    "{{incidentId}}",
+                    "acknowledgments"
+                  ]
                 },
                 "description": "Per-guardian ack status — lets the teacher see whether the parent has read the report (useful before raising it again at pickup)."
               }
@@ -1919,14 +3140,32 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/media",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "children", "{{childId}}", "media"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "children",
+                    "{{childId}}",
+                    "media"
+                  ]
                 },
                 "body": {
                   "mode": "formdata",
                   "formdata": [
-                    { "key": "files", "type": "file", "src": [], "description": "One or more files" },
-                    { "key": "caption", "type": "text", "value": "Painting class today", "description": "Optional caption" }
+                    {
+                      "key": "files",
+                      "type": "file",
+                      "src": [],
+                      "description": "One or more files"
+                    },
+                    {
+                      "key": "caption",
+                      "type": "text",
+                      "value": "Painting class today",
+                      "description": "Optional caption"
+                    }
                   ]
                 },
                 "description": "Bulk upload for one child. Same response shape as the admin endpoint; the test script saves `{{mediaId}}`."
@@ -1955,14 +3194,32 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/media",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "rooms", "{{roomId}}", "media"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "rooms",
+                    "{{roomId}}",
+                    "media"
+                  ]
                 },
                 "body": {
                   "mode": "formdata",
                   "formdata": [
-                    { "key": "files", "type": "file", "src": [], "description": "One or more files" },
-                    { "key": "caption", "type": "text", "value": "Group painting", "description": "Optional caption" }
+                    {
+                      "key": "files",
+                      "type": "file",
+                      "src": [],
+                      "description": "One or more files"
+                    },
+                    {
+                      "key": "caption",
+                      "type": "text",
+                      "value": "Group painting",
+                      "description": "Optional caption"
+                    }
                   ]
                 }
               }
@@ -1974,8 +3231,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/media/{{mediaId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "media", "{{mediaId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "media",
+                    "{{mediaId}}"
+                  ]
                 },
                 "description": "Returns 403 if you're not the uploader, 409 if the 24-hour window has elapsed."
               }
@@ -1987,11 +3251,27 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/media",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "children", "{{childId}}", "media"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "children",
+                    "{{childId}}",
+                    "media"
+                  ],
                   "query": [
-                    { "key": "from", "value": "2026-05-01", "disabled": true },
-                    { "key": "to", "value": "2026-05-22", "disabled": true }
+                    {
+                      "key": "from",
+                      "value": "2026-05-01",
+                      "disabled": true
+                    },
+                    {
+                      "key": "to",
+                      "value": "2026-05-22",
+                      "disabled": true
+                    }
                   ]
                 }
               }
@@ -2003,10 +3283,22 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/media",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "rooms", "{{roomId}}", "media"],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "rooms",
+                    "{{roomId}}",
+                    "media"
+                  ],
                   "query": [
-                    { "key": "date", "value": "2026-05-22", "disabled": true }
+                    {
+                      "key": "date",
+                      "value": "2026-05-22",
+                      "disabled": true
+                    }
                   ]
                 }
               }
@@ -2022,12 +3314,21 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/announcements",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "announcements"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "announcements"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -2055,12 +3356,22 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/announcements/{{announcementId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "announcements", "{{announcementId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "announcements",
+                    "{{announcementId}}"
+                  ]
                 },
                 "body": {
                   "mode": "raw",
@@ -2076,8 +3387,15 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/announcements/{{announcementId}}",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "announcements", "{{announcementId}}"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "announcements",
+                    "{{announcementId}}"
+                  ]
                 },
                 "description": "403 if not the author."
               }
@@ -2089,8 +3407,16 @@
                 "header": [],
                 "url": {
                   "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/announcements",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "teacher", "rooms", "{{roomId}}", "announcements"]
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "rooms",
+                    "{{roomId}}",
+                    "announcements"
+                  ]
                 }
               }
             }
@@ -2109,8 +3435,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/children",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "children"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "children"
+              ]
             },
             "description": "Returns the currently authenticated parent's enrolled children (one row per child, ordered by link creation date)."
           }
@@ -2122,8 +3454,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/children/{{childId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "children", "{{childId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "children",
+                "{{childId}}"
+              ]
             },
             "description": "Returns the child profile plus authorized pickups and emergency contacts. Returns 404 if the parent isn't linked to this child OR the child is unenrolled (deliberately the same code so we don't leak existence)."
           }
@@ -2135,10 +3474,22 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/children/{{childId}}/daily-logs?date=2026-05-22",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "children", "{{childId}}", "daily-logs"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "children",
+                "{{childId}}",
+                "daily-logs"
+              ],
               "query": [
-                { "key": "date", "value": "2026-05-22", "description": "ISO date" }
+                {
+                  "key": "date",
+                  "value": "2026-05-22",
+                  "description": "ISO date"
+                }
               ]
             },
             "description": "Returns the child's daily log for the specified date — **published entries only** (DRAFT entries are invisible to parents). Returns 404 if no log exists for that date, or the parent isn't linked, or the child is unenrolled."
@@ -2151,11 +3502,27 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/children/{{childId}}/daily-logs?from=2026-05-01&to=2026-05-22",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "children", "{{childId}}", "daily-logs"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "children",
+                "{{childId}}",
+                "daily-logs"
+              ],
               "query": [
-                { "key": "from", "value": "2026-05-01", "description": "ISO date inclusive" },
-                { "key": "to", "value": "2026-05-22", "description": "ISO date inclusive" }
+                {
+                  "key": "from",
+                  "value": "2026-05-01",
+                  "description": "ISO date inclusive"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-05-22",
+                  "description": "ISO date inclusive"
+                }
               ]
             },
             "description": "Day-by-day summaries between `from` and `to` (inclusive) with at least one published entry. Each entry shows the published count; drill into a date via **Daily Log for Date** to see full entries."
@@ -2168,8 +3535,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/nursery",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "nursery"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "nursery"
+              ]
             },
             "description": "Returns the parent's nursery profile: name, logo, timezone, opening hours, geofence center + radius. The mobile app uses `geofenceLat`/`geofenceLng`/`geofenceRadiusM` to gray out the Check In button when the device is outside the radius. Server still validates on POST — see PRD §7 (geofence)."
           }
@@ -2179,12 +3552,24 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/parent/children/{{childId}}/attendance/check-in",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "children", "{{childId}}", "attendance", "check-in"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "children",
+                "{{childId}}",
+                "attendance",
+                "check-in"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2198,12 +3583,24 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/parent/children/{{childId}}/attendance/check-out",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "children", "{{childId}}", "attendance", "check-out"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "children",
+                "{{childId}}",
+                "attendance",
+                "check-out"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2219,10 +3616,22 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/children/{{childId}}/attendance?date=2026-05-22",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "children", "{{childId}}", "attendance"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "children",
+                "{{childId}}",
+                "attendance"
+              ],
               "query": [
-                { "key": "date", "value": "2026-05-22", "description": "ISO date" }
+                {
+                  "key": "date",
+                  "value": "2026-05-22",
+                  "description": "ISO date"
+                }
               ]
             },
             "description": "Today's (or any past day's) attendance state for one of the parent's children: status, last check-in/out times, and the full event list for that day."
@@ -2235,11 +3644,28 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/children/{{childId}}/attendance/history?from=2026-05-01&to=2026-05-22",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "children", "{{childId}}", "attendance", "history"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "children",
+                "{{childId}}",
+                "attendance",
+                "history"
+              ],
               "query": [
-                { "key": "from", "value": "2026-05-01", "description": "ISO date inclusive" },
-                { "key": "to", "value": "2026-05-22", "description": "ISO date inclusive" }
+                {
+                  "key": "from",
+                  "value": "2026-05-01",
+                  "description": "ISO date inclusive"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-05-22",
+                  "description": "ISO date inclusive"
+                }
               ]
             },
             "description": "One row per calendar day in the range with status + last check-in/out. Drives the parent attendance-history calendar in the Figma — FE renders weekend cells from the dates themselves, absent cells from `status = NOT_ARRIVED`."
@@ -2252,8 +3678,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/children/{{childId}}/incidents",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "children", "{{childId}}", "incidents"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "children",
+                "{{childId}}",
+                "incidents"
+              ]
             },
             "description": "All incidents for one of the parent's linked enrolled children, newest first. Each row carries `acknowledged: true/false` and `acknowledgedAt` for the calling parent specifically."
           }
@@ -2265,8 +3699,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/incidents/{{incidentId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "incidents", "{{incidentId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "incidents",
+                "{{incidentId}}"
+              ]
             },
             "description": "Full incident detail. Returns 404 if the parent isn't linked or the child is unenrolled (same code on purpose — no existence leak)."
           }
@@ -2278,8 +3719,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/incidents/{{incidentId}}/acknowledge",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "incidents", "{{incidentId}}", "acknowledge"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "incidents",
+                "{{incidentId}}",
+                "acknowledge"
+              ]
             },
             "description": "Mark the incident as 'seen' for the calling parent. Idempotent — second call is a no-op (acknowledgedAt stays the original timestamp). Fires `IncidentAcknowledgedEvent` only on the first ack so the admin notification doesn't repeat."
           }
@@ -2291,12 +3740,35 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/children/{{childId}}/media",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "children", "{{childId}}", "media"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "children",
+                "{{childId}}",
+                "media"
+              ],
               "query": [
-                { "key": "date", "value": "2026-05-22", "disabled": true, "description": "Optional — single day" },
-                { "key": "from", "value": "2026-05-01", "disabled": true, "description": "Optional — range start (inclusive)" },
-                { "key": "to", "value": "2026-05-22", "disabled": true, "description": "Optional — range end (inclusive)" }
+                {
+                  "key": "date",
+                  "value": "2026-05-22",
+                  "disabled": true,
+                  "description": "Optional — single day"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-05-01",
+                  "disabled": true,
+                  "description": "Optional — range start (inclusive)"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-05-22",
+                  "disabled": true,
+                  "description": "Optional — range end (inclusive)"
+                }
               ]
             },
             "description": "Parent's per-child gallery. Aggregates **two** sources, both filtered to non-deleted items:\n- Child-scoped media (uploaded directly to this child)\n- Room-scoped media for the child's current room (so a 'Sunflower room party' upload shows up for every Sunflower kid's parent)\n\nResults are merged and sorted newest-first. View-only — parents cannot delete (PRD §6.1). 404 if the child is unenrolled or the parent isn't linked."
@@ -2309,8 +3781,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/announcements",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "announcements"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "announcements"
+              ]
             },
             "description": "Returns all announcements visible to this parent: nursery-wide ones AND any room-scoped ones for rooms their enrolled children currently belong to. Each row carries `seenByMe` + `seenByMeAt` (no auto-mark; that happens only on `GET /{id}`)."
           }
@@ -2322,8 +3800,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/announcements/{{announcementId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "announcements", "{{announcementId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "announcements",
+                "{{announcementId}}"
+              ]
             },
             "description": "Full detail with attachments resolved. **First call** for this announcement+parent pair inserts an `announcement_seen` row (so admin's `seenCount` ticks up). Subsequent calls are no-ops."
           }
@@ -2335,10 +3820,20 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/events?upcoming=false",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "events"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "events"
+              ],
               "query": [
-                { "key": "upcoming", "value": "false", "description": "Set true to filter to `startsAt >= now`" }
+                {
+                  "key": "upcoming",
+                  "value": "false",
+                  "description": "Set true to filter to `startsAt >= now`"
+                }
               ]
             },
             "description": "Nursery-wide + room-targeted events for the parent's children's rooms. Each row has `savedByMe` for the Figma 'saved' chip."
@@ -2351,8 +3846,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/events/{{eventId}}/save",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "events", "{{eventId}}", "save"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "events",
+                "{{eventId}}",
+                "save"
+              ]
             },
             "description": "Idempotent — second call is a no-op (savedAt remains the original timestamp)."
           }
@@ -2364,8 +3867,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/events/{{eventId}}/save",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "events", "{{eventId}}", "save"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "events",
+                "{{eventId}}",
+                "save"
+              ]
             }
           }
         },
@@ -2376,8 +3887,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/events/saved",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "events", "saved"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "events",
+                "saved"
+              ]
             },
             "description": "Backs the Figma 'Saved' events tab in the parent app."
           }
@@ -2395,10 +3913,20 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/notifications?status=all",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "notifications"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notifications"
+              ],
               "query": [
-                { "key": "status", "value": "all", "description": "`all` (default) or `unread`" }
+                {
+                  "key": "status",
+                  "value": "all",
+                  "description": "`all` (default) or `unread`"
+                }
               ]
             },
             "description": "All non-deleted notifications for the current user, newest first. Test script saves the first id into `{{notificationId}}`.",
@@ -2426,8 +3954,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/notifications/unread-count",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "notifications", "unread-count"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notifications",
+                "unread-count"
+              ]
             },
             "description": "Returns `{ unread: <number> }`. Use this for the badge on the parent home screen."
           }
@@ -2439,8 +3974,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/notifications/{{notificationId}}/read",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "notifications", "{{notificationId}}", "read"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notifications",
+                "{{notificationId}}",
+                "read"
+              ]
             },
             "description": "Idempotent — second call returns the same `readAt` timestamp."
           }
@@ -2452,8 +3995,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/notifications/read-all",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "notifications", "read-all"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notifications",
+                "read-all"
+              ]
             },
             "description": "Returns the resulting `unread` count (should be 0)."
           }
@@ -2465,8 +4015,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/notifications/{{notificationId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "notifications", "{{notificationId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notifications",
+                "{{notificationId}}"
+              ]
             },
             "description": "Soft delete — sets `deleted_at`. The row is hidden from list endpoints but retained for audit."
           }
@@ -2478,8 +4035,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/notifications",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "notifications"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notifications"
+              ]
             },
             "description": "Backs the Figma 'Delete All' button on the notifications screen. Soft-deletes every non-deleted notification for the caller."
           }
@@ -2491,8 +4054,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/notification-preferences",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "notification-preferences"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notification-preferences"
+              ]
             },
             "description": "Returns current preferences or defaults (`announcementsEnabled: true`, quiet hours null) if the user hasn't customized them yet."
           }
@@ -2502,12 +4071,21 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/me/notification-preferences",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "notification-preferences"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "notification-preferences"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2529,8 +4107,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/chat/threads/teacher/{{teacherId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "chat", "threads", "teacher", "{{teacherId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "chat",
+                "threads",
+                "teacher",
+                "{{teacherId}}"
+              ]
             },
             "description": "Idempotent — returns the existing DM if one exists. 403 if the teacher doesn't teach any of the parent's enrolled children's rooms.\n\nSaves `{{chatThreadId}}`."
           },
@@ -2556,8 +4143,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/parent/chat/threads/admin/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "parent", "chat", "threads", "admin", "{{userId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "parent",
+                "chat",
+                "threads",
+                "admin",
+                "{{userId}}"
+              ]
             },
             "description": "Set `{{userId}}` to an admin's id."
           }
@@ -2569,8 +4165,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/teacher/chat/threads/parent/{{guardianId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "teacher", "chat", "threads", "parent", "{{guardianId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "teacher",
+                "chat",
+                "threads",
+                "parent",
+                "{{guardianId}}"
+              ]
             },
             "description": "403 if the parent has no enrolled child in any of the teacher's assigned rooms."
           }
@@ -2582,8 +4187,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/teacher/chat/threads/room/{{roomId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "teacher", "chat", "threads", "room", "{{roomId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "teacher",
+                "chat",
+                "threads",
+                "room",
+                "{{roomId}}"
+              ]
             },
             "description": "PRD §6.2 'Initiate room group chat (teacher is creator)'. Idempotent — one ROOM_GROUP per room. Adds all current room teachers + parents of enrolled children as participants."
           }
@@ -2595,8 +4209,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/teacher/chat/threads/staff",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "teacher", "chat", "threads", "staff"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "teacher",
+                "chat",
+                "threads",
+                "staff"
+              ]
             },
             "description": "PRD §6.2 'Staff chat: private group with all teachers + admin, no parents'. Idempotent — one per nursery."
           }
@@ -2608,8 +4230,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/chat/threads/user/{{userId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "chat", "threads", "user", "{{userId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "chat",
+                "threads",
+                "user",
+                "{{userId}}"
+              ]
             },
             "description": "PRD §6.3 'Admin: 1-on-1 with any user'."
           }
@@ -2619,12 +4250,24 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/admin/chat/participants/{{chatParticipantId}}/mute",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "chat", "participants", "{{chatParticipantId}}", "mute"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "chat",
+                "participants",
+                "{{chatParticipantId}}",
+                "mute"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2640,8 +4283,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/chat/threads",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "chat", "threads"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "chat",
+                "threads"
+              ]
             },
             "description": "All threads I'm an active participant in, newest-message first. Each row carries `unreadCount` + last-message preview + my per-thread `muted` flag."
           }
@@ -2653,8 +4303,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/chat/threads/{{chatThreadId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "chat", "threads", "{{chatThreadId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "chat",
+                "threads",
+                "{{chatThreadId}}"
+              ]
             },
             "description": "Full thread metadata + full participant list (including those who left). Use this after opening a DM to grab the other party's userId for follow-up sends."
           }
@@ -2666,11 +4324,29 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/chat/threads/{{chatThreadId}}/messages?limit=50",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "chat", "threads", "{{chatThreadId}}", "messages"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "chat",
+                "threads",
+                "{{chatThreadId}}",
+                "messages"
+              ],
               "query": [
-                { "key": "before", "value": "2026-05-22T18:00:00Z", "disabled": true, "description": "ISO instant for pagination cursor — fetch messages older than this" },
-                { "key": "limit", "value": "50", "description": "1-200, default 50" }
+                {
+                  "key": "before",
+                  "value": "2026-05-22T18:00:00Z",
+                  "disabled": true,
+                  "description": "ISO instant for pagination cursor — fetch messages older than this"
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "1-200, default 50"
+                }
               ]
             },
             "description": "Paginated message history, newest first. Pass `before` (an ISO instant from the oldest message you have) to scroll back."
@@ -2681,12 +4357,24 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/me/chat/threads/{{chatThreadId}}/messages",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "chat", "threads", "{{chatThreadId}}", "messages"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "chat",
+                "threads",
+                "{{chatThreadId}}",
+                "messages"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2714,12 +4402,24 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/me/chat/threads/{{chatThreadId}}/read",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "chat", "threads", "{{chatThreadId}}", "read"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "chat",
+                "threads",
+                "{{chatThreadId}}",
+                "read"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2733,12 +4433,23 @@
           "request": {
             "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/me/chat/threads/{{chatThreadId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "chat", "threads", "{{chatThreadId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "chat",
+                "threads",
+                "{{chatThreadId}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2752,12 +4463,24 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{baseUrl}}/api/me/chat/messages/{{chatMessageId}}/reactions",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "chat", "messages", "{{chatMessageId}}", "reactions"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "chat",
+                "messages",
+                "{{chatMessageId}}",
+                "reactions"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -2773,10 +4496,22 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/chat/messages/{{chatMessageId}}/reactions?emoji=👍",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "chat", "messages", "{{chatMessageId}}", "reactions"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "chat",
+                "messages",
+                "{{chatMessageId}}",
+                "reactions"
+              ],
               "query": [
-                { "key": "emoji", "value": "👍" }
+                {
+                  "key": "emoji",
+                  "value": "👍"
+                }
               ]
             }
           }
@@ -2788,8 +4523,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/me/chat/messages/{{chatMessageId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "me", "chat", "messages", "{{chatMessageId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "chat",
+                "messages",
+                "{{chatMessageId}}"
+              ]
             },
             "description": "Soft delete. Sender can delete their own message. Admins can delete any message in their nursery (PRD §6.3 'Remove any message in any group chat')."
           }
@@ -2801,10 +4544,19 @@
             "header": [],
             "url": {
               "raw": "ws://localhost:8080/ws-chat?access_token=YOUR_JWT_HERE",
-              "host": ["ws", "localhost:8080"],
-              "path": ["ws-chat"],
+              "host": [
+                "ws",
+                "localhost:8080"
+              ],
+              "path": [
+                "ws-chat"
+              ],
               "query": [
-                { "key": "access_token", "value": "YOUR_JWT_HERE", "description": "JWT for handshake auth — browsers can't add headers to native WS, so token goes in query" }
+                {
+                  "key": "access_token",
+                  "value": "YOUR_JWT_HERE",
+                  "description": "JWT for handshake auth — browsers can't add headers to native WS, so token goes in query"
+                }
               ]
             },
             "description": "**This is a reference URL only** — Postman's REST runner can't actually connect to WebSockets. Use Postman's separate WebSocket client (New → WebSocket Request) with this URL, then send STOMP CONNECT/SUBSCRIBE frames.\n\n**STOMP frames after connect**:\n```\nSUBSCRIBE\nid:sub-0\ndestination:/topic/threads/{{chatThreadId}}\n\n^@\n```\n\nServer-side validation: handshake fails (4xx) if `access_token` is missing/invalid/disabled; SUBSCRIBE is silently rejected if you aren't an active participant of that thread."
@@ -2823,8 +4575,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/files/children/{{childId}}/photo",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "files", "children", "{{childId}}", "photo"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "files",
+                "children",
+                "{{childId}}",
+                "photo"
+              ]
             },
             "description": "Stream the child's profile photo (set via `Admin / Children / Upload Photo`). Returns 404 if no photo or no access."
           }
@@ -2836,8 +4596,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/files/media/{{mediaId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "files", "media", "{{mediaId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "files",
+                "media",
+                "{{mediaId}}"
+              ]
             },
             "description": "Stream a media item (photo or video). Access rules:\n- ADMIN: any media in same nursery\n- TEACHER: media whose scope room matches one of their assignments (room-scoped media, or child-scoped media for children in their assigned rooms)\n- PARENT: media linked to one of their children OR room-scoped media for the child's current room\n\nReturns 404 for cross-nursery, deleted, or unauthorized access (deliberately the same code — no existence leak)."
           }

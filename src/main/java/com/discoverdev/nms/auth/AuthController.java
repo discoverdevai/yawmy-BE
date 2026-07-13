@@ -2,8 +2,10 @@ package com.discoverdev.nms.auth;
 
 import com.discoverdev.nms.auth.dto.AcceptInviteRequest;
 import com.discoverdev.nms.auth.dto.ForgotPasswordRequest;
+import com.discoverdev.nms.auth.dto.InviteValidationResponse;
 import com.discoverdev.nms.auth.dto.LoginRequest;
 import com.discoverdev.nms.auth.dto.MeResponse;
+import com.discoverdev.nms.auth.dto.ReactivationRequest;
 import com.discoverdev.nms.auth.dto.RefreshRequest;
 import com.discoverdev.nms.auth.dto.ResetPasswordRequest;
 import com.discoverdev.nms.auth.dto.TokenResponse;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -42,9 +45,20 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/invite")
+    public InviteValidationResponse validateInvite(@RequestParam String token) {
+        return authService.validateInvite(token);
+    }
+
     @PostMapping("/accept-invite")
     public TokenResponse acceptInvite(@Valid @RequestBody AcceptInviteRequest req) {
         return authService.acceptInvite(req.token(), req.password());
+    }
+
+    @PostMapping("/invite/reactivation-request")
+    public ResponseEntity<Void> requestReactivation(@Valid @RequestBody ReactivationRequest req) {
+        authService.requestReactivation(req.email(), req.message());
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/forgot-password")

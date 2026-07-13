@@ -74,6 +74,30 @@ public class UserInvitationFactory {
         );
     }
 
+    /**
+     * Issues a fresh invite token for an EXISTING (still-disabled) user — used when a
+     * super-admin reactivates an admin whose original invite expired.
+     */
+    public IssuedInvite reissueInvite(User user, User invitedBy) {
+        String rawToken = Tokens.generateRawToken();
+        Instant expiresAt = Instant.now().plus(inviteTtl);
+        Invite invite = Invite.builder()
+            .user(user)
+            .tokenHash(Tokens.hash(rawToken))
+            .expiresAt(expiresAt)
+            .invitedBy(invitedBy)
+            .build();
+        inviteRepository.save(invite);
+        return new IssuedInvite(
+            invite.getId(),
+            user.getId(),
+            user.getEmail(),
+            user.getRole(),
+            rawToken,
+            expiresAt
+        );
+    }
+
     public record IssuedInvite(
         UUID inviteId,
         UUID userId,

@@ -1,7 +1,9 @@
 package com.discoverdev.nms.admin.dto;
 
 import com.discoverdev.nms.nursery.Nursery;
+import java.time.DayOfWeek;
 import java.time.LocalTime;
+import java.util.Set;
 import java.util.UUID;
 
 public record NurseryResponse(
@@ -11,6 +13,7 @@ public record NurseryResponse(
     String timezone,
     LocalTime hoursStart,
     LocalTime hoursEnd,
+    Set<DayOfWeek> workingDays,
     Double geofenceLat,
     Double geofenceLng,
     Integer geofenceRadiusM
@@ -23,6 +26,7 @@ public record NurseryResponse(
             n.getTimezone(),
             n.getHoursStart(),
             n.getHoursEnd(),
+            n.getWorkingDays(),
             n.getGeofenceLat(),
             n.getGeofenceLng(),
             n.getGeofenceRadiusM()

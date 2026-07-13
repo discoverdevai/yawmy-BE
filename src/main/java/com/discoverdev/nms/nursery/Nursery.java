@@ -1,12 +1,21 @@
 package com.discoverdev.nms.nursery;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,11 +38,26 @@ public class Nursery {
     @GeneratedValue
     private UUID id;
 
-    @Column(nullable = false, length = 200)
+    // Nullable: a nursery is created "bare" (id only) when a super-admin invites its
+    // admin. The admin fills in name/logo/location/hours/geofence after accepting.
+    @Column(length = 200)
     private String name;
 
     @Column(name = "logo_url", length = 500)
     private String logoUrl;
+
+    // Storage key for the uploaded logo file; served via GET /api/files/nursery/{id}/logo.
+    @Column(name = "logo_key", length = 300)
+    private String logoKey;
+
+    // Days of the week the nursery operates (e.g. MONDAY..FRIDAY). The open/close time
+    // (hoursStart/hoursEnd) applies to each working day.
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "nursery_working_days", joinColumns = @JoinColumn(name = "nursery_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "day_of_week", length = 16)
+    @Builder.Default
+    private Set<DayOfWeek> workingDays = new LinkedHashSet<>();
 
     @Column(length = 64)
     @Builder.Default
