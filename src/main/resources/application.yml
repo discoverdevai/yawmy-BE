@@ -57,7 +57,7 @@ app:
   password-reset:
     ttl-minutes: 60
   bootstrap-admin:
-    email: shehab4111995@gmail.com
+    email: shehabgamal623@gmail.com
     password: ChangeMe!123
     full-name: Root Admin
   media:
