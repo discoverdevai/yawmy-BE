@@ -1,9 +1,11 @@
 package com.discoverdev.nms.auth;
 
 import com.discoverdev.nms.auth.dto.AcceptInviteRequest;
+import com.discoverdev.nms.auth.dto.ChangePasswordRequest;
 import com.discoverdev.nms.auth.dto.ForgotPasswordRequest;
 import com.discoverdev.nms.auth.dto.InviteValidationResponse;
 import com.discoverdev.nms.auth.dto.LoginRequest;
+import com.discoverdev.nms.auth.dto.LogoutRequest;
 import com.discoverdev.nms.auth.dto.MeResponse;
 import com.discoverdev.nms.auth.dto.ReactivationRequest;
 import com.discoverdev.nms.auth.dto.RefreshRequest;
@@ -40,8 +42,17 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@AuthenticationPrincipal AppUserDetails principal) {
-        authService.logout(principal.getUser());
+    public ResponseEntity<Void> logout(
+        @RequestBody(required = false) LogoutRequest req,
+        @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        authService.logout(principal.getUser(), req != null ? req.refreshToken() : null);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/logout-all")
+    public ResponseEntity<Void> logoutAll(@AuthenticationPrincipal AppUserDetails principal) {
+        authService.logoutAll(principal.getUser());
         return ResponseEntity.noContent().build();
     }
 
@@ -58,6 +69,15 @@ public class AuthController {
     @PostMapping("/invite/reactivation-request")
     public ResponseEntity<Void> requestReactivation(@Valid @RequestBody ReactivationRequest req) {
         authService.requestReactivation(req.email(), req.message());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(
+        @Valid @RequestBody ChangePasswordRequest req,
+        @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        authService.changePassword(principal.getUser(), req.currentPassword(), req.newPassword());
         return ResponseEntity.noContent().build();
     }
 

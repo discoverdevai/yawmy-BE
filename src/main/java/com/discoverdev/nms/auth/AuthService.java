@@ -103,8 +103,31 @@ public class AuthService {
         return issueTokens(token.getUser());
     }
 
+    /**
+     * Sign out a single device: revokes only the refresh token that device holds.
+     * If no refresh token is supplied we cannot tell the devices apart, so we fall
+     * back to revoking every session (safer than revoking nothing).
+     */
     @Transactional
-    public void logout(User user) {
+    public void logout(User user, String rawRefreshToken) {
+        if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+            logoutAll(user);
+            return;
+        }
+        refreshTokenRepository.findByTokenHash(Tokens.hash(rawRefreshToken))
+            .filter(token -> token.getUser().getId().equals(user.getId()))
+            .ifPresent(token -> {
+                if (token.getRevokedAt() == null) {
+                    token.setRevokedAt(Instant.now());
+                    refreshTokenRepository.save(token);
+                }
+            });
+        log.info("Signed out one device for user {}", user.getId());
+    }
+
+    /** Sign out everywhere: revokes every active refresh token for the user. */
+    @Transactional
+    public void logoutAll(User user) {
         int revoked = refreshTokenRepository.revokeAllForUser(user, Instant.now());
         log.info("Revoked {} refresh tokens for user {}", revoked, user.getId());
     }
@@ -195,6 +218,28 @@ public class AuthService {
         passwordResetTokenRepository.save(token);
 
         refreshTokenRepository.revokeAllForUser(user, Instant.now());
+    }
+
+    /**
+     * Change the password of an already-authenticated user. Requires the current
+     * password (no emailed token). Revokes refresh tokens so other sessions must
+     * sign in again with the new password.
+     */
+    @Transactional
+    public void changePassword(User user, String currentPassword, String newPassword) {
+        if (user.getPasswordHash() == null
+            || !passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new AuthException("Current password is incorrect");
+        }
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new AuthException("New password must be different from the current password");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        refreshTokenRepository.revokeAllForUser(user, Instant.now());
+        log.info("Password changed for user {}", user.getId());
     }
 
     private TokenResponse issueTokens(User user) {

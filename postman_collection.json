@@ -140,163 +140,8 @@
   "item": [
     {
       "name": "Super Admin",
-      "description": "Platform-level endpoints. Only accessible to users with role `SUPER_ADMIN` — the bootstrap account is one. Super admins are not attached to any nursery; they provision new nurseries and onboard their first admin(s).",
+      "description": "Platform-level endpoints. Requires role `SUPER_ADMIN` (the bootstrap/root admin). Super admins are not attached to any nursery.\n\n**Admin onboarding = 2 calls total:**\n1. `Auth / Login` (root admin) -> saves `{{accessToken}}`\n2. `Invite Admin (One-Call)` -> creates the nursery in the background + invites the admin + emails the link\n\nAnything under **zz - DEPRECATED** is the old two-step flow and should not be used.",
       "item": [
-        {
-          "name": "Create Nursery",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/super-admin/nurseries",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "super-admin",
-                "nurseries"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Sunshine Nursery\"\n}"
-            },
-            "description": "Provisions a new nursery (tenant). Body has just `name` (1–200 chars); the nursery starts with default timezone `Africa/Cairo` and geofence radius 100m. The first admin will fill in the rest via `Admin / Nursery / Update Nursery` after they accept their invite.\n\n**Response (201)** is the full nursery shape. The test script auto-saves the new id into `{{nurseryId}}`."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const json = pm.response.json();",
-                  "  if (json.id) pm.collectionVariables.set('nurseryId', json.id);",
-                  "}"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "List Nurseries",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/super-admin/nurseries",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "super-admin",
-                "nurseries"
-              ]
-            },
-            "description": "Returns every nursery on the platform, ordered by name. Super-admin-only."
-          }
-        },
-        {
-          "name": "Get Nursery",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "super-admin",
-                "nurseries",
-                "{{nurseryId}}"
-              ]
-            },
-            "description": "Fetch a single nursery by id. Returns 404 if not found."
-          }
-        },
-        {
-          "name": "Rename Nursery",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "super-admin",
-                "nurseries",
-                "{{nurseryId}}"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Sunshine Nursery (renamed)\"\n}"
-            },
-            "description": "Rename a nursery. Operational details (logo, hours, geofence) are owned by the nursery's admin via `Admin / Nursery / Update Nursery`."
-          }
-        },
-        {
-          "name": "Invite Admin",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}/admin-invites",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "super-admin",
-                "nurseries",
-                "{{nurseryId}}",
-                "admin-invites"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"nour@sunshine.local\",\n  \"fullName\": \"Nour Owner\",\n  \"locale\": \"EN\",\n  \"phone\": \"+201000000001\"\n}"
-            },
-            "description": "Invite the first admin (or any additional admin) for the target nursery. Role is forced to `ADMIN`; the invited user is auto-attached to the nursery in the URL.\n\n**Body**\n- `email` (required, valid email, max 254)\n- `fullName` (required, max 200)\n- `locale` (optional) — `EN` or `AR`, defaults to `EN`.\n- `phone` (optional, max 32)\n\n**Response (201)** has the same shape as `Admin / Invites / Create Invite`. The test script saves `{{inviteToken}}` and `{{userId}}` so the chain into `Auth / Accept Invite` just works.\n\nReturns 404 if the nursery id is unknown, 409 if the email already exists in the system."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const json = pm.response.json();",
-                  "  if (json.token) pm.collectionVariables.set('inviteToken', json.token);",
-                  "  if (json.userId) pm.collectionVariables.set('userId', json.userId);",
-                  "}"
-                ]
-              }
-            }
-          ]
-        },
         {
           "name": "Invite Admin (One-Call)",
           "request": {
@@ -372,6 +217,167 @@
                   "}"
                 ]
               }
+            }
+          ]
+        },
+        {
+          "name": "List Nurseries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/nurseries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "nurseries"
+              ]
+            },
+            "description": "Returns every nursery on the platform, ordered by name. Super-admin-only."
+          }
+        },
+        {
+          "name": "Get Nursery",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "nurseries",
+                "{{nurseryId}}"
+              ]
+            },
+            "description": "Fetch a single nursery by id. Returns 404 if not found."
+          }
+        },
+        {
+          "name": "Rename Nursery",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "nurseries",
+                "{{nurseryId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sunshine Nursery (renamed)\"\n}"
+            },
+            "description": "Rename a nursery. Operational details (logo, hours, geofence) are owned by the nursery's admin via `Admin / Nursery / Update Nursery`."
+          }
+        },
+        {
+          "name": "zz - DEPRECATED (Old Two-Step Flow)",
+          "description": "**Do not use these.** They are the old two-step admin-onboarding flow, kept only so old requests still resolve and for reference.\n\n| Old (here) | Replaced by |\n|---|---|\n| `POST /api/super-admin/nurseries` (Create Nursery) | *nothing* - the nursery is now created automatically |\n| `POST /api/super-admin/nurseries/{id}/admin-invites` | `POST /api/super-admin/admin-invites` (**Invite Admin (One-Call)**) |\n\n**Old flow:** create nursery -> get id -> invite admin into it -> copy token manually (no email).\n**New flow:** `Invite Admin (One-Call)` with just `email` + `fullName`. Done.",
+          "item": [
+            {
+              "name": "[DEPRECATED] Create Nursery",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/super-admin/nurseries",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "super-admin",
+                    "nurseries"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Sunshine Nursery\"\n}"
+                },
+                "description": "> **DEPRECATED - do not use for admin onboarding.**\n> Replaced by **Super Admin / Invite Admin (One-Call)**, which creates the nursery automatically in the background. You no longer create a nursery by hand before inviting its admin.\n\nKept only for reference / rare manual provisioning. The endpoint still works: it creates a nursery with a `name` (1-200 chars), default timezone `Africa/Cairo`, and geofence radius 100m. Saves `{{nurseryId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.id) pm.collectionVariables.set('nurseryId', json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "[DEPRECATED] Invite Admin (nursery-scoped)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/super-admin/nurseries/{{nurseryId}}/admin-invites",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "super-admin",
+                    "nurseries",
+                    "{{nurseryId}}",
+                    "admin-invites"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"nour@sunshine.local\",\n  \"fullName\": \"Nour Owner\",\n  \"locale\": \"EN\",\n  \"phone\": \"+201000000001\"\n}"
+                },
+                "description": "> **DEPRECATED - do not use.**\n> Replaced by **Super Admin / Invite Admin (One-Call)** (`POST /api/super-admin/admin-invites`).\n\n**Why it was replaced:** this old endpoint required you to first call `[DEPRECATED] Create Nursery` to get a `{{nurseryId}}`, then invite the admin into it - two calls, and you had to invent a nursery name up front. It also does **not** send the invitation email; you had to copy the token by hand.\n\nThe new one-call endpoint creates a **bare nursery** (id only), links the admin, issues the 48h invite, and **emails the link** - all in one request, with no `nurseryId` and no name needed. The admin names the nursery himself during setup.\n\nKept only for reference. Requires `{{nurseryId}}` in the URL."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.token) pm.collectionVariables.set('inviteToken', json.token);",
+                      "  if (json.userId) pm.collectionVariables.set('userId', json.userId);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
             }
           ]
         }
@@ -476,7 +482,12 @@
           "name": "Logout",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/auth/logout",
               "host": [
@@ -488,7 +499,30 @@
                 "logout"
               ]
             },
-            "description": "Revokes the current user's refresh tokens. Requires a valid access token.\n\n**Note**: this does NOT invalidate the access token itself (JWT is stateless and never expires). For real revocation, use `Admin / Disable User` or have the frontend discard the token."
+            "description": "Sign out **this device only**. Pass the device's `refreshToken` in the body and only that session is revoked - the user's other devices stay signed in.\n\nIf the body is **omitted**, the backend cannot tell the sessions apart and falls back to revoking **every** session (same as `Logout All Devices`).\n\n**Body** (optional)\n- `refreshToken` - the token returned by `Login` / `Accept Invite` on this device\n\n**Responses**\n- `204` - done\n- `403` - no/expired access token\n\n> **Note:** access tokens are stateless JWTs, so this does not kill an access token that is already issued - it stays usable until it expires (30 min). The client must discard it (the app does). For immediate lockout use `Admin / Users / Disable User`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Logout All Devices",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout-all"
+              ]
+            },
+            "description": "Sign out **everywhere**: revokes every active refresh token for the logged-in user, so all devices must sign in again. No body - the user is taken from the access token.\n\nBacks the app's **\"Sign Out From All Devices\"** action (Profile -> Security). Useful after a password change or if a device is lost.\n\n**Responses**\n- `204` - all sessions revoked\n- `403` - no/expired access token\n\n> **Note:** already-issued access tokens remain valid until they expire (30 min) because JWTs are stateless. For immediate lockout use `Admin / Users / Disable User`."
           }
         },
         {
@@ -508,6 +542,34 @@
               ]
             },
             "description": "Returns the currently authenticated user's profile: `id`, `email`, `fullName`, `role`, `locale`. Useful for the frontend to render role-aware UI without decoding the JWT."
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "change-password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"ChangeMe!123\",\n  \"newPassword\": \"NewStrongPass!456\"\n}"
+            },
+            "description": "Change the password of the **currently logged-in user**. Requires a valid access token (any role) - the user proves ownership with their current password instead of an emailed reset token.\n\nUse this for the in-app 'Change Password' screen. For a user who is locked out and cannot log in, use `Forgot Password` -> `Reset Password` instead.\n\n**Body**\n- `currentPassword` (required) - the existing password\n- `newPassword` (required, 8-100 chars) - must differ from the current one\n\n**Responses**\n- `204` - password changed. All of the user's refresh tokens are revoked, so other devices must sign in again with the new password. The access token you used stays valid until it expires.\n- `401` - `currentPassword` is wrong, or the new password equals the current one\n- `400` - `newPassword` fails validation (shorter than 8 chars / blank)\n- `403` - no/expired access token"
           }
         },
         {
@@ -679,7 +741,8 @@
             "description": "Completes a password reset using the token issued by the forgot-password flow. On success, sets the new password and revokes all refresh tokens for that user (existing access tokens remain valid until the user is disabled — frontend should drop them).\n\nFails with 401 if the token is unknown, already used, or expired."
           }
         }
-      ]
+      ],
+      "description": "Authentication + the invitation lifecycle.\n\n**Invite lifecycle (new):**\n- `Validate Invite` (GET) - what the mobile app calls when the deep link opens it; read-only, tells you VALID / EXPIRED / USED / INVALID.\n- `Accept Invite` (POST) - sets the password, activates the account, returns a token pair (auto-login).\n- `Request Reactivation` (POST) - from the 'invitation expired' screen; emails the super-admins so they can call `Super Admin / Resend Invite`.\n\n`Login` is used by all roles. Access tokens are valid 30 minutes."
     },
     {
       "name": "Admin",
