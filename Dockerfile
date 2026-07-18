@@ -18,7 +18,9 @@ FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
 # Non-root user for safety
-RUN addgroup -S spring && adduser -S spring -G spring
+RUN addgroup -S spring && adduser -S spring -G spring \
+    && mkdir -p /app/uploads \
+    && chown -R spring:spring /app/uploads
 USER spring
 
 COPY --from=build /workspace/app.jar /app/app.jar

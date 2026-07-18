@@ -62,4 +62,4 @@ app:
     full-name: Root Admin
   media:
     local:
-      root: ./uploads
+      root: ${MEDIA_ROOT:./uploads}
