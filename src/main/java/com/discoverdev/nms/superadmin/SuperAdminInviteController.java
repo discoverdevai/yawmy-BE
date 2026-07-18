@@ -3,6 +3,7 @@ package com.discoverdev.nms.superadmin;
 import com.discoverdev.nms.admin.dto.CreateInviteResponse;
 import com.discoverdev.nms.auth.AppUserDetails;
 import com.discoverdev.nms.superadmin.dto.InviteAdminRequest;
+import com.discoverdev.nms.superadmin.dto.ResendInviteRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -46,5 +47,18 @@ public class SuperAdminInviteController {
         @AuthenticationPrincipal AppUserDetails principal
     ) {
         return service.resendInvite(userId, principal.getUser());
+    }
+
+    /**
+     * Resend by email — use the email from the reactivation-request notification
+     * directly, no user id needed.
+     */
+    @PostMapping("/resend")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CreateInviteResponse resendByEmail(
+        @Valid @RequestBody ResendInviteRequest req,
+        @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        return service.resendInvite(req.email(), principal.getUser());
     }
 }

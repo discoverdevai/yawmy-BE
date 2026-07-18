@@ -186,7 +186,7 @@
           ]
         },
         {
-          "name": "Resend Invite (Reactivate Admin)",
+          "name": "Resend Invite (by user id)",
           "request": {
             "method": "POST",
             "header": [],
@@ -203,7 +203,50 @@
                 "resend"
               ]
             },
-            "description": "Reactivate a pending admin whose invite expired (or who requested a new link via `Auth / Request Reactivation`). Issues a **fresh 48h invite token** for the existing disabled user and re-emails the link.\n\n`{{userId}}` is the invited admin's user id (saved by `Invite Admin (One-Call)`).\n\n**Response (201)**: same shape as the invite; the test script saves the new `{{inviteToken}}`.\n\nErrors: 404 (user not found), 400 (user is not an admin), 409 (admin already activated)."
+            "description": "Reactivate a pending admin **by user id** — issues a fresh 48h invite token and re-emails the link.\n\nPrefer **Resend Invite (by email)** when acting on a reactivation request, since the notification gives you the email, not the id.\n\n**Response (201)** saves the new `{{inviteToken}}`.\nErrors: 404 (user not found), 400 (not an admin), 409 (already activated)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.token) pm.collectionVariables.set('inviteToken', json.token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Resend Invite (by email)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/super-admin/admin-invites/resend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "super-admin",
+                "admin-invites",
+                "resend"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nour@sunshine.local\"\n}"
+            },
+            "description": "Reactivate a pending admin **by email** — use the exact email from the `Auth / Request Reactivation` notification, so **no user id lookup is needed**.\n\nIssues a fresh 48h invite token for that admin and re-emails the link.\n\n**Body**\n- `email` (required) - the pending admin's email\n\n**Response (201)**: the invite (saves the new `{{inviteToken}}`).\nErrors: 404 (no pending admin with this email), 400 (not an admin), 409 (already activated)."
           },
           "event": [
             {
@@ -676,7 +719,7 @@
               "mode": "raw",
               "raw": "{\n  \"email\": \"nour@sunshine.local\",\n  \"message\": \"My invitation link expired, please send a new one.\"\n}"
             },
-            "description": "Sent from the app's 'invitation expired' screen when the invitee taps **Contact Admin**. Emails **all super-admins** that this person is asking to be re-invited, so a super-admin can call `Super Admin / Resend Invite`.\n\n**Body**\n- `email` (required)\n- `message` (optional, max 1000)\n\nAlways returns **204** - even for unknown emails - to avoid leaking who has a pending invite. Public endpoint (no auth)."
+            "description": "Sent from the app's 'invitation expired' screen when the invitee taps **Contact Admin**.\n\nThe backend now **validates the email against the database**: it must belong to someone who was actually invited and has **not activated yet** (an outstanding/expired invite). If it matches, all **super-admins** are emailed so one of them can reactivate.\n\n**Body**\n- `email` (required)\n- `message` (optional, max 1000)\n\n**Responses**\n- `204` - accepted; super-admins notified.\n- `404` - *Email not found or incorrect email* (no invited user with this email).\n- `409` - *This account is already active* (the invite was already accepted).\n\nPublic endpoint (no auth)."
           }
         },
         {

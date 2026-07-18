@@ -1,5 +1,9 @@
 server:
   port: 8080
+  error:
+    # Include the thrown message in the JSON body so the app can show it to users
+    # (e.g. "Email not found or incorrect email"). Spring hides it by default.
+    include-message: always
 
 spring:
   application:

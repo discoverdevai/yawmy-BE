@@ -15,9 +15,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AuthService {
@@ -61,9 +63,20 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public void requestReactivation(String email, String message) {
+        // The email must belong to someone who was actually invited and hasn't
+        // activated yet (i.e. an outstanding/expired invite). Otherwise reject.
+        User user = userRepository.findByEmailIgnoreCase(email)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "Email not found or incorrect email. Please enter the email your invitation was sent to."));
+
+        if (user.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "This account is already active. Please sign in instead.");
+        }
+
         List<User> superAdmins = userRepository.findByRole(Role.SUPER_ADMIN);
         for (User superAdmin : superAdmins) {
-            mailService.sendReactivationNotice(superAdmin.getEmail(), email, message);
+            mailService.sendReactivationNotice(superAdmin.getEmail(), user.getEmail(), message);
         }
         log.info("Reactivation requested for {} -> notified {} super-admin(s)", email, superAdmins.size());
     }

@@ -44,13 +44,27 @@ public class SuperAdminNurseryService {
         this.userRepository = userRepository;
     }
 
-    /**
-     * Reactivate a pending admin whose invite expired: issue a fresh token and re-email it.
-     */
+    /** Reactivate a pending admin by user id: issue a fresh token and re-email it. */
     @Transactional
     public CreateInviteResponse resendInvite(UUID userId, User superAdmin) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        return resendFor(user, superAdmin);
+    }
+
+    /**
+     * Reactivate a pending admin by their email — the value from the reactivation
+     * notification, so the root admin doesn't need to look up a user id.
+     */
+    @Transactional
+    public CreateInviteResponse resendInvite(String email, User superAdmin) {
+        User user = userRepository.findByEmailIgnoreCase(email)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "No pending admin found with this email"));
+        return resendFor(user, superAdmin);
+    }
+
+    private CreateInviteResponse resendFor(User user, User superAdmin) {
         if (user.getRole() != Role.ADMIN) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User is not an admin");
         }
