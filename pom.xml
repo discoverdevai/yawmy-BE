@@ -24,7 +24,7 @@
         <!-- Override Spring Boot's managed pgjdbc (42.7.4) to patch CVE-2025-49146 -->
         <postgresql.version>42.7.7</postgresql.version>
     </properties>
-
+<!--shehab-->
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
