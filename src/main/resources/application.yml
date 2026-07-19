@@ -20,9 +20,14 @@ spring:
     password: YF3iSbgs7uUxPSwgEX7kkR89ZXaRjz
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
+      # Clever Cloud's free Postgres caps connections per role (~5). Keep the pool
+      # small so a single instance — and brief old+new overlap during a deploy —
+      # never exceeds it. Override with DB_POOL_SIZE if you move to a bigger DB.
+      maximum-pool-size: ${DB_POOL_SIZE:3}
+      minimum-idle: 1
       connection-timeout: 30000
+      idle-timeout: 60000       # drop idle connections after 60s
+      max-lifetime: 300000      # recycle connections every 5 min (avoids stale/zombie)
 
   jpa:
     hibernate:
