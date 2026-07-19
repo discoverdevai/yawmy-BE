@@ -42,11 +42,21 @@ public class PasswordResetToken {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    // Opaque reset token handed to the client; used on the final reset call.
     @Column(name = "token_hash", nullable = false, unique = true, length = 128)
     private String tokenHash;
 
+    // Hashed 4-digit OTP that is emailed to the user and entered on the verify screen.
+    @Column(name = "otp_hash", length = 128)
+    private String otpHash;
+
+    // OTP expiry (short — e.g. 30s). expiresAt refers to the OTP, not the whole session.
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
+
+    // Set once the OTP is verified; the final reset requires this to be non-null.
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
 
     @Column(name = "used_at")
     private Instant usedAt;
@@ -59,7 +69,12 @@ public class PasswordResetToken {
         return usedAt != null;
     }
 
+    /** OTP expiry check. */
     public boolean isExpired() {
         return Instant.now().isAfter(expiresAt);
+    }
+
+    public boolean isVerified() {
+        return verifiedAt != null;
     }
 }

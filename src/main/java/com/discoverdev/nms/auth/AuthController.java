@@ -3,7 +3,10 @@ package com.discoverdev.nms.auth;
 import com.discoverdev.nms.auth.dto.AcceptInviteRequest;
 import com.discoverdev.nms.auth.dto.ChangePasswordRequest;
 import com.discoverdev.nms.auth.dto.ForgotPasswordRequest;
+import com.discoverdev.nms.auth.dto.ForgotPasswordResponse;
 import com.discoverdev.nms.auth.dto.InviteValidationResponse;
+import com.discoverdev.nms.auth.dto.ResendResetOtpRequest;
+import com.discoverdev.nms.auth.dto.VerifyResetOtpRequest;
 import com.discoverdev.nms.auth.dto.LoginRequest;
 import com.discoverdev.nms.auth.dto.LogoutRequest;
 import com.discoverdev.nms.auth.dto.MeResponse;
@@ -82,9 +85,19 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
-        authService.forgotPassword(req.email());
+    public ForgotPasswordResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
+        return authService.forgotPassword(req.email());
+    }
+
+    @PostMapping("/verify-reset-otp")
+    public ResponseEntity<Void> verifyResetOtp(@Valid @RequestBody VerifyResetOtpRequest req) {
+        authService.verifyResetOtp(req.token(), req.otp());
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/resend-reset-otp")
+    public ForgotPasswordResponse resendResetOtp(@Valid @RequestBody ResendResetOtpRequest req) {
+        return authService.resendResetOtp(req.token());
     }
 
     @PostMapping("/reset-password")

@@ -64,7 +64,8 @@ app:
     from: ${MAIL_FROM:}
     from-name: ${MAIL_FROM_NAME:Yawmy Care}
   password-reset:
-    ttl-minutes: 60
+    ttl-minutes: 15       # overall reset session cap
+    otp-ttl-seconds: 300  # each emailed OTP is valid for 5 minutes
   bootstrap-admin:
     email: shehabgamal623@gmail.com
     password: ChangeMe!123

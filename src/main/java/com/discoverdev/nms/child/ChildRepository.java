@@ -14,6 +14,8 @@ public interface ChildRepository extends JpaRepository<Child, UUID> {
     List<Child> findByNurseryIdAndEnrollmentStatusOrderByFullNameAsc(
         UUID nurseryId, EnrollmentStatus status);
 
+    long countByNurseryIdAndEnrollmentStatus(UUID nurseryId, EnrollmentStatus status);
+
     List<Child> findByNurseryIdAndRoomIdAndEnrollmentStatusOrderByFullNameAsc(
         UUID nurseryId, UUID roomId, EnrollmentStatus status);
 

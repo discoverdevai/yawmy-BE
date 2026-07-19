@@ -68,6 +68,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/auth/accept-invite").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/invite/reactivation-request").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/verify-reset-otp").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/resend-reset-otp").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
                 .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
                 .anyRequest().authenticated()

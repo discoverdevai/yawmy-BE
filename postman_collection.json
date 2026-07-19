@@ -750,7 +750,83 @@
               "mode": "raw",
               "raw": "{\n  \"email\": \"shehabgamal623@gmail.com\"\n}"
             },
-            "description": "Initiates the password reset flow. Always returns 204 — even for unknown emails — to avoid email enumeration.\n\nIn dev, the generated token is logged to the server console (look for `Password reset token issued for ...`). Copy it into the `passwordResetToken` collection variable, then call `Auth / Reset Password`."
+            "description": "Start a password reset (OTP flow).\n\n- **404** *This email is not registered* if the email doesn't exist (the app shows this inline).\n- On success: invalidates any prior attempt, generates a **4-digit OTP** (valid **30s**), emails it, and returns `{ token, expiresInSeconds }`. Keep `token` (saved to `{{passwordResetToken}}`) for the next steps.\n\n**Body**: `email` (required)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  if (json.token) pm.collectionVariables.set('passwordResetToken', json.token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify Reset OTP",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-reset-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-reset-otp"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{passwordResetToken}}\",\n  \"otp\": \"1234\"\n}"
+            },
+            "description": "Verify the 4-digit OTP the user typed against the emailed code.\n\n- **204** on success (the reset session is now marked verified).\n- **400** *Incorrect verification code* or *The code has expired. Please resend a new code.*\n\n**Body**: `token` (from Forgot Password), `otp` (4 digits from the email)."
+          }
+        },
+        {
+          "name": "Resend Reset OTP",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/resend-reset-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "resend-reset-otp"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{passwordResetToken}}\"\n}"
+            },
+            "description": "Issue a fresh OTP for the same reset session (the app's *Resend code* action, available once the 30s timer hits 0). Emails a new 4-digit OTP and resets the countdown. Returns `{ token, expiresInSeconds }` (same token)."
           }
         },
         {
@@ -781,7 +857,7 @@
               "mode": "raw",
               "raw": "{\n  \"token\": \"{{passwordResetToken}}\",\n  \"newPassword\": \"NewStrongPass!123\"\n}"
             },
-            "description": "Completes a password reset using the token issued by the forgot-password flow. On success, sets the new password and revokes all refresh tokens for that user (existing access tokens remain valid until the user is disabled — frontend should drop them).\n\nFails with 401 if the token is unknown, already used, or expired."
+            "description": "Final step: set the new password. Requires the OTP to have been **verified** first (`Verify Reset OTP`).\n\n- **204** on success — the password is updated and all refresh tokens revoked.\n- **400** if the code wasn't verified, the session expired (15 min cap), or the token was already used.\n\n**Body**: `token` (`{{passwordResetToken}}`), `newPassword` (min 8)."
           }
         }
       ],

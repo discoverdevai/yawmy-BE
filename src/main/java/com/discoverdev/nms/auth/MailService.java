@@ -60,6 +60,19 @@ public class MailService {
         send(toSuperAdmin, subject, body);
     }
 
+    public void sendPasswordResetOtp(String toEmail, String otp) {
+        String subject = "Your Yawmy Care password reset code";
+        String body = """
+            You requested to reset your Yawmy Care password.
+
+            Your verification code is: %s
+
+            This code expires in 30 seconds. If it expires, tap "Resend code" in the app.
+            If you did not request this, you can ignore this email.
+            """.formatted(otp);
+        send(toEmail, subject, body);
+    }
+
     private void send(String toEmail, String subject, String body) {
         if (props.from() == null || props.from().isBlank()) {
             log.warn("Mail not sent to {}: app.mail.from (MAIL_FROM) is not configured", toEmail);

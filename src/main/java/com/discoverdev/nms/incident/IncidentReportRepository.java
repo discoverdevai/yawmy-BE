@@ -15,6 +15,8 @@ public interface IncidentReportRepository extends JpaRepository<IncidentReport, 
     List<IncidentReport> findByNurseryIdAndIncidentAtBetweenOrderByIncidentAtDesc(
         UUID nurseryId, Instant from, Instant to);
 
+    long countByNurseryIdAndIncidentAtBetween(UUID nurseryId, Instant from, Instant to);
+
     List<IncidentReport> findByChildIdOrderByIncidentAtDesc(UUID childId);
 
     List<IncidentReport> findByRoomIdOrderByIncidentAtDesc(UUID roomId);

@@ -20,6 +20,11 @@ public final class Tokens {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
+    /** Random 4-digit numeric OTP (0000–9999), zero-padded. */
+    public static String generateOtp() {
+        return String.format("%04d", RANDOM.nextInt(10000));
+    }
+
     public static String hash(String rawToken) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

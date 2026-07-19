@@ -1,5 +1,6 @@
 package com.discoverdev.nms.auth;
 
+import com.discoverdev.nms.auth.dto.ForgotPasswordResponse;
 import com.discoverdev.nms.auth.dto.InviteValidationResponse;
 import com.discoverdev.nms.auth.dto.TokenResponse;
 import com.discoverdev.nms.config.JwtProperties;
@@ -36,6 +37,7 @@ public class AuthService {
     private final MailService mailService;
     private final Duration refreshTokenTtl;
     private final Duration passwordResetTtl;
+    private final Duration otpTtl;
 
     public AuthService(
         AuthenticationManager authenticationManager,
@@ -59,6 +61,7 @@ public class AuthService {
         this.mailService = mailService;
         this.refreshTokenTtl = Duration.ofDays(jwtProps.refreshTokenTtlDays());
         this.passwordResetTtl = Duration.ofMinutes(resetProps.ttlMinutes());
+        this.otpTtl = Duration.ofSeconds(resetProps.otpTtlSeconds());
     }
 
     @Transactional(readOnly = true)
@@ -196,31 +199,76 @@ public class AuthService {
         );
     }
 
+    /**
+     * Start a password reset: validate the email exists, issue a reset token +
+     * a short-lived OTP, and email the OTP. Returns the token (kept by the client)
+     * and the OTP countdown in seconds.
+     */
     @Transactional
-    public void forgotPassword(String email) {
-        userRepository.findByEmailIgnoreCase(email).ifPresentOrElse(user -> {
-            String raw = Tokens.generateRawToken();
-            PasswordResetToken reset = PasswordResetToken.builder()
-                .user(user)
-                .tokenHash(Tokens.hash(raw))
-                .expiresAt(Instant.now().plus(passwordResetTtl))
-                .build();
-            passwordResetTokenRepository.save(reset);
-            log.info("Password reset token issued for {}: {}", user.getEmail(), raw);
-        }, () -> log.info("Password reset requested for unknown email: {}", email));
+    public ForgotPasswordResponse forgotPassword(String email) {
+        User user = userRepository.findByEmailIgnoreCase(email)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "This email is not registered"));
+
+        // Clear any prior attempt so only the newest OTP is valid.
+        passwordResetTokenRepository.deleteByUserId(user.getId());
+
+        String rawToken = Tokens.generateRawToken();
+        String otp = Tokens.generateOtp();
+        PasswordResetToken reset = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(Tokens.hash(rawToken))
+            .otpHash(Tokens.hash(otp))
+            .expiresAt(Instant.now().plus(otpTtl))
+            .build();
+        passwordResetTokenRepository.save(reset);
+
+        mailService.sendPasswordResetOtp(user.getEmail(), otp);
+        log.info("Password reset OTP issued for {}", user.getEmail());
+        return new ForgotPasswordResponse(rawToken, otpTtl.toSeconds());
     }
 
+    /** Verify the OTP the user typed against the emailed code. */
+    @Transactional
+    public void verifyResetOtp(String rawToken, String otp) {
+        PasswordResetToken token = loadResetToken(rawToken);
+        if (token.isExpired()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "The code has expired. Please resend a new code.");
+        }
+        if (token.getOtpHash() == null || !token.getOtpHash().equals(Tokens.hash(otp))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Incorrect verification code");
+        }
+        token.setVerifiedAt(Instant.now());
+        passwordResetTokenRepository.save(token);
+    }
+
+    /** Issue a fresh OTP for an in-progress reset (the "Resend code" action). */
+    @Transactional
+    public ForgotPasswordResponse resendResetOtp(String rawToken) {
+        PasswordResetToken token = loadResetToken(rawToken);
+        String otp = Tokens.generateOtp();
+        token.setOtpHash(Tokens.hash(otp));
+        token.setExpiresAt(Instant.now().plus(otpTtl));
+        token.setVerifiedAt(null); // a new code must be re-verified
+        passwordResetTokenRepository.save(token);
+
+        mailService.sendPasswordResetOtp(token.getUser().getEmail(), otp);
+        return new ForgotPasswordResponse(rawToken, otpTtl.toSeconds());
+    }
+
+    /** Final step: set the new password once the OTP has been verified. */
     @Transactional
     public void resetPassword(String rawResetToken, String newPassword) {
-        String tokenHash = Tokens.hash(rawResetToken);
-        PasswordResetToken token = passwordResetTokenRepository.findByTokenHash(tokenHash)
-            .orElseThrow(() -> new AuthException("Invalid reset token"));
-
-        if (token.isUsed()) {
-            throw new AuthException("Reset token already used");
+        PasswordResetToken token = loadResetToken(rawResetToken);
+        if (!token.isVerified()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Please verify the code before resetting your password");
         }
-        if (token.isExpired()) {
-            throw new AuthException("Reset token expired");
+        if (Instant.now().isAfter(token.getCreatedAt().plus(passwordResetTtl))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "This reset session has expired. Please start again.");
         }
 
         User user = token.getUser();
@@ -231,6 +279,15 @@ public class AuthService {
         passwordResetTokenRepository.save(token);
 
         refreshTokenRepository.revokeAllForUser(user, Instant.now());
+    }
+
+    private PasswordResetToken loadResetToken(String rawToken) {
+        PasswordResetToken token = passwordResetTokenRepository.findByTokenHash(Tokens.hash(rawToken))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid reset request"));
+        if (token.isUsed()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This reset link was already used");
+        }
+        return token;
     }
 
     /**
