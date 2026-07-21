@@ -48,6 +48,7 @@ public class AdminChildService {
         Room room = null;
         if (req.roomId() != null) {
             room = loadActiveRoom(req.roomId(), nurseryId);
+            assertRoomHasSpace(room);
         }
         Child child = Child.builder()
             .nursery(nursery)
@@ -103,7 +104,13 @@ public class AdminChildService {
         if (req.roomId() == null) {
             child.setRoom(null);
         } else {
-            child.setRoom(loadActiveRoom(req.roomId(), nurseryId));
+            Room target = loadActiveRoom(req.roomId(), nurseryId);
+            UUID currentRoomId = child.getRoom() != null ? child.getRoom().getId() : null;
+            // Only enforce capacity when actually moving into a different room.
+            if (!target.getId().equals(currentRoomId)) {
+                assertRoomHasSpace(target);
+            }
+            child.setRoom(target);
         }
         return ChildResponse.of(childRepository.save(child));
     }
@@ -147,5 +154,15 @@ public class AdminChildService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Room is archived");
         }
         return room;
+    }
+
+    /** Reject assigning a child when the room is already at capacity. */
+    private void assertRoomHasSpace(Room room) {
+        long current = childRepository.countByRoomIdAndEnrollmentStatus(
+            room.getId(), EnrollmentStatus.ENROLLED);
+        if (current >= room.getCapacity()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Room is full (max " + room.getCapacity() + " children)");
+        }
     }
 }

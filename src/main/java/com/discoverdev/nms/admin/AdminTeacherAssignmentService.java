@@ -1,6 +1,7 @@
 package com.discoverdev.nms.admin;
 
 import com.discoverdev.nms.admin.dto.TeacherAssignmentResponse;
+import com.discoverdev.nms.admin.dto.TeacherResponse;
 import com.discoverdev.nms.nursery.Room;
 import com.discoverdev.nms.nursery.RoomRepository;
 import com.discoverdev.nms.nursery.TeacherRoomAssignment;
@@ -76,6 +77,17 @@ public class AdminTeacherAssignmentService {
         loadTeacher(teacherId, nurseryId);
         return assignmentRepository.findByTeacherIdOrderByCreatedAtAsc(teacherId).stream()
             .map(TeacherAssignmentResponse::of)
+            .toList();
+    }
+
+    /** All enabled teachers in the caller's nursery (for the assign-teacher dropdown). */
+    @Transactional(readOnly = true)
+    public List<TeacherResponse> listTeachers() {
+        UUID nurseryId = TenantContext.currentNurseryId();
+        return userRepository
+            .findByNurseryIdAndRoleAndEnabledTrueOrderByFullNameAsc(nurseryId, Role.TEACHER)
+            .stream()
+            .map(TeacherResponse::of)
             .toList();
     }
 

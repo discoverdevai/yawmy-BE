@@ -65,6 +65,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/invite").permitAll()
                 .requestMatchers(HttpMethod.GET, "/invite/open").permitAll()
+                .requestMatchers(HttpMethod.GET, "/invite/open-teacher").permitAll()
+                .requestMatchers(HttpMethod.GET, "/invite/open-parent").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/accept-invite").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/invite/reactivation-request").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password").permitAll()

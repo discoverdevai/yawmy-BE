@@ -45,7 +45,17 @@ public class Room {
     @Column(nullable = false, length = 100)
     private String name;
 
-    private Integer capacity;
+    // Max children allowed in the room. Defaults to 20 when not specified.
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer capacity = 20;
+
+    // Uploaded room image (file served via GET /api/files/rooms/{id}/image).
+    @Column(name = "image_key", length = 300)
+    private String imageKey;
+
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
 
     @Column(name = "archived_at")
     private Instant archivedAt;

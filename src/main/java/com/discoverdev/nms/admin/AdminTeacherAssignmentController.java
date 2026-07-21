@@ -1,6 +1,7 @@
 package com.discoverdev.nms.admin;
 
 import com.discoverdev.nms.admin.dto.TeacherAssignmentResponse;
+import com.discoverdev.nms.admin.dto.TeacherResponse;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -34,6 +35,12 @@ public class AdminTeacherAssignmentController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void unassign(@PathVariable UUID roomId, @PathVariable UUID teacherId) {
         service.unassign(roomId, teacherId);
+    }
+
+    /** All available teachers in the nursery — for the "assign teacher" dropdown. */
+    @GetMapping("/teachers")
+    public List<TeacherResponse> listTeachers() {
+        return service.listTeachers();
     }
 
     @GetMapping("/rooms/{roomId}/teachers")

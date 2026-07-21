@@ -60,6 +60,42 @@ public class MailService {
         send(toSuperAdmin, subject, body);
     }
 
+    public void sendStaffInvite(String toEmail, String fullName, String inviteLink) {
+        String greeting = (fullName != null && !fullName.isBlank()) ? fullName : "there";
+        String subject = "You're invited to join Yawmy Care";
+        String body = """
+            Hi %s,
+
+            You have been invited to join your nursery's team on Yawmy Care.
+            Tap the link below to set your password and get started:
+
+            %s
+
+            This invitation expires in 48 hours.
+
+            If you did not expect this, you can ignore this email.
+            """.formatted(greeting, inviteLink);
+        send(toEmail, subject, body);
+    }
+
+    public void sendParentInvite(String toEmail, String fullName, String inviteLink) {
+        String greeting = (fullName != null && !fullName.isBlank()) ? fullName : "there";
+        String subject = "You're invited to Yawmy Care";
+        String body = """
+            Hi %s,
+
+            You have been invited to follow your child's day on Yawmy Care.
+            Tap the link below to set your password and get started:
+
+            %s
+
+            This invitation expires in 48 hours.
+
+            If you did not expect this, you can ignore this email.
+            """.formatted(greeting, inviteLink);
+        send(toEmail, subject, body);
+    }
+
     public void sendPasswordResetOtp(String toEmail, String otp) {
         String subject = "Your Yawmy Care password reset code";
         String body = """

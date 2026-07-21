@@ -6,10 +6,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Public HTTPS landing page for invitation links.
+ * Public HTTPS landing pages for invitation links.
  *
  * Email clients only linkify http/https URLs, not custom schemes like
- * {@code nurseryadmin://}. So the invite email points here (an https URL that IS
+ * {@code nurseryadmin://}. So invite emails point here (an https URL that IS
  * clickable); this page then hands off to the app's deep link. If the app is not
  * installed, the user sees a short fallback message.
  */
@@ -17,9 +17,25 @@ import org.springframework.web.bind.annotation.RestController;
 public class InviteLandingController {
 
     @GetMapping(value = "/invite/open", produces = MediaType.TEXT_HTML_VALUE)
-    public String open(@RequestParam(name = "token", required = false) String token) {
-        String safe = jsString(token);
-        String deepLink = "nurseryadmin://invitation?token=" + urlEncode(token);
+    public String openAdmin(@RequestParam(name = "token", required = false) String token) {
+        return page(token, "nurseryadmin", "Nursery Admin");
+    }
+
+    @GetMapping(value = "/invite/open-teacher", produces = MediaType.TEXT_HTML_VALUE)
+    public String openTeacher(@RequestParam(name = "token", required = false) String token) {
+        return page(token, "nurseryteacher", "Nursery Teacher");
+    }
+
+    @GetMapping(value = "/invite/open-parent", produces = MediaType.TEXT_HTML_VALUE)
+    public String openParent(@RequestParam(name = "token", required = false) String token) {
+        return page(token, "nurseryparent", "Yawmy Care");
+    }
+
+    private String page(String token, String scheme, String appName) {
+        String safeToken = jsString(token);
+        String safeScheme = jsString(scheme);
+        String safeApp = htmlEscape(appName);
+        String deepLink = scheme + "://invitation?token=" + urlEncode(token);
         return """
             <!doctype html>
             <html lang="en">
@@ -42,20 +58,25 @@ public class InviteLandingController {
             <body>
               <div class="card">
                 <h1>Open your invitation</h1>
-                <p>Tap the button below to open the Nursery Admin app and set up your account.</p>
+                <p>Tap the button below to open the %s app and set up your account.</p>
                 <a class="btn" id="open" href="%s">Open the app</a>
-                <div class="hint">Don't have the app yet? Install <b>Nursery Admin</b> from your app store, then tap this link again.</div>
+                <div class="hint">Don't have the app yet? Install <b>%s</b> from your app store, then tap this link again.</div>
               </div>
               <script>
                 var token = "%s";
-                var deepLink = "nurseryadmin://invitation?token=" + encodeURIComponent(token);
+                var deepLink = "%s://invitation?token=" + encodeURIComponent(token);
                 document.getElementById('open').setAttribute('href', deepLink);
                 // Try to open the app automatically.
                 setTimeout(function () { window.location.href = deepLink; }, 300);
               </script>
             </body>
             </html>
-            """.formatted(deepLink, safe);
+            """.formatted(safeApp, deepLink, safeApp, safeToken, safeScheme);
+    }
+
+    private static String htmlEscape(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private static String jsString(String s) {

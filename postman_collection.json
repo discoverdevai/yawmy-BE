@@ -1261,6 +1261,49 @@
           "description": "Enrollment: create child profiles, assign to rooms, manage guardians, authorized pickups, and emergency contacts. Photo upload is per-child. Unenroll soft-revokes the child and removes them from parent self-service queries; the row + linked data are retained for history.",
           "item": [
             {
+              "name": "Invite Parent (One-Shot Enroll)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/parent-invites",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "parent-invites"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"parent\": {\n    \"email\": \"mona.parent@example.com\",\n    \"fullName\": \"Mona Hassan\",\n    \"relationship\": \"Mother\"\n  },\n  \"children\": [\n    {\n      \"fullName\": \"Yara Ahmed\",\n      \"dob\": \"2022-03-15\",\n      \"roomId\": \"{{roomId}}\",\n      \"guardians\": [\n        {\n          \"fullName\": \"Ahmed Ali\",\n          \"relationship\": \"Father\",\n          \"phone\": \"+201000000011\"\n        }\n      ],\n      \"pickups\": [\n        {\n          \"fullName\": \"Auntie Sara\",\n          \"relationship\": \"Aunt\",\n          \"phone\": \"+201000000020\"\n        }\n      ]\n    },\n    {\n      \"fullName\": \"Omar Ahmed\",\n      \"dob\": \"2024-01-10\",\n      \"roomId\": \"{{roomId}}\",\n      \"guardians\": [],\n      \"pickups\": []\n    }\n  ]\n}"
+                },
+                "description": "**Atomic** parent enrollment for the 3-step Invite Parent flow. In one transaction it creates every child, links the parent as primary guardian (creating the parent account + invite and **emailing** them once), adds any additional guardians (each invited + emailed), and adds pickup contacts. If anything fails, the whole thing rolls back - no partial data.\n\n**Body**\n- `parent`: `{ email, fullName, relationship }` - relationship is the role: `Mother` or `Father`\n- `children[]`: `{ fullName, dob (YYYY-MM-DD, past), roomId?, guardians[]?, pickups[]? }`\n  - `guardians[]`: additional guardians `{ fullName, relationship, phone }` (saved as emergency contacts - no account)\n  - `pickups[]`: pickup contacts `{ fullName, relationship, phone }` (saved info only)\n\n**Response (201)**: `{ parentId, parentEmail, inviteToken, inviteExpiresAt, children:[{childId, fullName}] }`.\nUse each `childId` to upload that child's image via `POST /api/admin/children/{childId}/photo`.\n\nMultiple children under one parent are supported - the parent invite email is sent **exactly once**.\n\nErrors: 409 if a child's room is full, or if a guardian email belongs to another nursery / a non-parent role."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.inviteToken) pm.collectionVariables.set('inviteToken', json.inviteToken);",
+                      "  if (json.children && json.children.length) pm.collectionVariables.set('childId', json.children[0].childId);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
               "name": "Create Child",
               "request": {
                 "method": "POST",

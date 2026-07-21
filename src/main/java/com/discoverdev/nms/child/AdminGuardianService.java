@@ -1,8 +1,10 @@
 package com.discoverdev.nms.child;
 
+import com.discoverdev.nms.auth.MailService;
 import com.discoverdev.nms.auth.UserInvitationFactory;
 import com.discoverdev.nms.child.dto.GuardianLinkResponse;
 import com.discoverdev.nms.child.dto.LinkOrInviteGuardianRequest;
+import com.discoverdev.nms.config.InviteProperties;
 import com.discoverdev.nms.tenant.TenantContext;
 import com.discoverdev.nms.user.Role;
 import com.discoverdev.nms.user.User;
@@ -22,17 +24,29 @@ public class AdminGuardianService {
     private final ChildRepository childRepository;
     private final UserRepository userRepository;
     private final UserInvitationFactory invitationFactory;
+    private final MailService mailService;
+    private final InviteProperties inviteProperties;
 
     public AdminGuardianService(
         GuardianLinkRepository linkRepository,
         ChildRepository childRepository,
         UserRepository userRepository,
-        UserInvitationFactory invitationFactory
+        UserInvitationFactory invitationFactory,
+        MailService mailService,
+        InviteProperties inviteProperties
     ) {
         this.linkRepository = linkRepository;
         this.childRepository = childRepository;
         this.userRepository = userRepository;
         this.invitationFactory = invitationFactory;
+        this.mailService = mailService;
+        this.inviteProperties = inviteProperties;
+    }
+
+    private String buildParentInviteLink(String token) {
+        String base = inviteProperties.parentLinkBaseUrl();
+        String sep = base != null && base.contains("?") ? "&" : "?";
+        return base + sep + "token=" + token;
     }
 
     @Transactional
@@ -114,6 +128,10 @@ public class AdminGuardianService {
             .primary(Boolean.TRUE.equals(req.isPrimary()))
             .build();
         link = linkRepository.save(link);
+
+        // Email the parent a clickable invite link (same as admin/teacher invites).
+        mailService.sendParentInvite(issued.email(), req.fullName(), buildParentInviteLink(issued.token()));
+
         return GuardianLinkResponse.invited(link, issued.inviteId(), issued.token(), issued.expiresAt());
     }
 }

@@ -16,4 +16,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     long countByNurseryIdAndRole(UUID nurseryId, Role role);
 
     List<User> findByNurseryIdAndRoleAndEnabledTrue(UUID nurseryId, Role role);
+
+    List<User> findByNurseryIdAndRoleAndEnabledTrueOrderByFullNameAsc(UUID nurseryId, Role role);
+
+    // All users of a role in the nursery (enabled + pending), for the staff list.
+    List<User> findByNurseryIdAndRoleOrderByFullNameAsc(UUID nurseryId, Role role);
 }

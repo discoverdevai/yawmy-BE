@@ -3,6 +3,8 @@ package com.discoverdev.nms.admin;
 import com.discoverdev.nms.admin.dto.CreateRoomRequest;
 import com.discoverdev.nms.admin.dto.RoomResponse;
 import com.discoverdev.nms.admin.dto.UpdateRoomRequest;
+import com.discoverdev.nms.child.ChildRepository;
+import com.discoverdev.nms.child.EnrollmentStatus;
 import com.discoverdev.nms.nursery.Nursery;
 import com.discoverdev.nms.nursery.NurseryRepository;
 import com.discoverdev.nms.nursery.Room;
@@ -10,7 +12,9 @@ import com.discoverdev.nms.nursery.RoomRepository;
 import com.discoverdev.nms.tenant.TenantContext;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,12 +23,31 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class AdminRoomService {
 
+    // Default room capacity when the request doesn't specify one.
+    private static final int DEFAULT_CAPACITY = 20;
+
     private final RoomRepository roomRepository;
     private final NurseryRepository nurseryRepository;
+    private final ChildRepository childRepository;
+    private final AdminTeacherAssignmentService teacherAssignmentService;
 
-    public AdminRoomService(RoomRepository roomRepository, NurseryRepository nurseryRepository) {
+    public AdminRoomService(
+        RoomRepository roomRepository,
+        NurseryRepository nurseryRepository,
+        ChildRepository childRepository,
+        AdminTeacherAssignmentService teacherAssignmentService
+    ) {
         this.roomRepository = roomRepository;
         this.nurseryRepository = nurseryRepository;
+        this.childRepository = childRepository;
+        this.teacherAssignmentService = teacherAssignmentService;
+    }
+
+    /** Room response with its current enrolled-child count. */
+    private RoomResponse toResponse(Room room) {
+        long count = childRepository.countByRoomIdAndEnrollmentStatus(
+            room.getId(), EnrollmentStatus.ENROLLED);
+        return RoomResponse.of(room, count);
     }
 
     @Transactional
@@ -37,9 +60,15 @@ public class AdminRoomService {
         Room room = Room.builder()
             .nursery(nursery)
             .name(req.name())
-            .capacity(req.capacity())
+            .capacity(req.capacity() != null ? req.capacity() : DEFAULT_CAPACITY)
             .build();
-        return RoomResponse.of(roomRepository.save(room));
+        room = roomRepository.save(room);
+
+        // Optionally assign a teacher picked in the "add room" modal.
+        if (req.teacherId() != null) {
+            teacherAssignmentService.assign(room.getId(), req.teacherId());
+        }
+        return toResponse(room);
     }
 
     @Transactional(readOnly = true)
@@ -48,12 +77,23 @@ public class AdminRoomService {
         List<Room> rooms = includeArchived
             ? roomRepository.findByNurseryIdOrderByNameAsc(nurseryId)
             : roomRepository.findByNurseryIdAndArchivedAtIsNullOrderByNameAsc(nurseryId);
-        return rooms.stream().map(RoomResponse::of).toList();
+
+        // One grouped query for all room child-counts (no N+1).
+        Map<UUID, Long> counts = childRepository
+            .countEnrolledGroupedByRoom(nurseryId, EnrollmentStatus.ENROLLED)
+            .stream()
+            .collect(Collectors.toMap(
+                ChildRepository.RoomChildCount::getRoomId,
+                ChildRepository.RoomChildCount::getCount));
+
+        return rooms.stream()
+            .map(r -> RoomResponse.of(r, counts.getOrDefault(r.getId(), 0L)))
+            .toList();
     }
 
     @Transactional(readOnly = true)
     public RoomResponse get(UUID id) {
-        return RoomResponse.of(loadOwned(id));
+        return toResponse(loadOwned(id));
     }
 
     @Transactional
@@ -72,7 +112,7 @@ public class AdminRoomService {
             room.setName(req.name());
         }
         if (req.capacity() != null) room.setCapacity(req.capacity());
-        return RoomResponse.of(roomRepository.save(room));
+        return toResponse(roomRepository.save(room));
     }
 
     @Transactional
@@ -82,7 +122,7 @@ public class AdminRoomService {
             room.setArchivedAt(Instant.now());
             roomRepository.save(room);
         }
-        return RoomResponse.of(room);
+        return toResponse(room);
     }
 
     @Transactional
@@ -99,7 +139,7 @@ public class AdminRoomService {
             room.setArchivedAt(null);
             roomRepository.save(room);
         }
-        return RoomResponse.of(room);
+        return toResponse(room);
     }
 
     private Room loadOwned(UUID id) {

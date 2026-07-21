@@ -62,6 +62,18 @@ public class User {
     @Column(nullable = false, length = 16)
     private Role role;
 
+    // Job title for TEACHER staff (Lead Teacher, Assistant Teacher, …). Null for others.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "staff_role", length = 32)
+    private StaffRole staffRole;
+
+    // Uploaded profile image (served via GET /api/files/users/{id}/image).
+    @Column(name = "image_key", length = 300)
+    private String imageKey;
+
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 4)
     @Builder.Default
