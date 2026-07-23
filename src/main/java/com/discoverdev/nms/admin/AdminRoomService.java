@@ -1,8 +1,10 @@
 package com.discoverdev.nms.admin;
 
+import com.discoverdev.nms.admin.dto.ArchiveRoomRequest;
 import com.discoverdev.nms.admin.dto.CreateRoomRequest;
 import com.discoverdev.nms.admin.dto.RoomResponse;
 import com.discoverdev.nms.admin.dto.UpdateRoomRequest;
+import com.discoverdev.nms.child.Child;
 import com.discoverdev.nms.child.ChildRepository;
 import com.discoverdev.nms.child.EnrollmentStatus;
 import com.discoverdev.nms.nursery.Nursery;
@@ -11,6 +13,7 @@ import com.discoverdev.nms.nursery.Room;
 import com.discoverdev.nms.nursery.RoomRepository;
 import com.discoverdev.nms.tenant.TenantContext;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -123,6 +126,82 @@ public class AdminRoomService {
             roomRepository.save(room);
         }
         return toResponse(room);
+    }
+
+    /**
+     * Archive a room that still has children: every enrolled child must be
+     * reassigned to another active room, then the source room is archived — all
+     * in one transaction. Capacity is enforced per destination room.
+     */
+    @Transactional
+    public RoomResponse archiveWithReassignment(UUID roomId, ArchiveRoomRequest req) {
+        UUID nurseryId = TenantContext.currentNurseryId();
+        Room source = loadOwned(roomId);
+        if (source.getArchivedAt() != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Room is already archived");
+        }
+
+        // The children that actually live in this room right now.
+        List<Child> sourceChildren = childRepository
+            .findByNurseryIdAndRoomIdAndEnrollmentStatusOrderByFullNameAsc(
+                nurseryId, roomId, EnrollmentStatus.ENROLLED);
+        Map<UUID, Child> childrenById = sourceChildren.stream()
+            .collect(Collectors.toMap(Child::getId, c -> c));
+
+        // Desired child -> destination room, from the request.
+        List<ArchiveRoomRequest.Reassignment> moves =
+            req != null && req.reassignments() != null ? req.reassignments() : List.of();
+        Map<UUID, UUID> desired = new HashMap<>();
+        for (ArchiveRoomRequest.Reassignment m : moves) {
+            if (m.childId() == null || m.roomId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Each reassignment needs a childId and a roomId");
+            }
+            if (!childrenById.containsKey(m.childId())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Child " + m.childId() + " is not in this room");
+            }
+            if (m.roomId().equals(roomId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Cannot reassign a child to the room being archived");
+            }
+            desired.put(m.childId(), m.roomId());
+        }
+
+        // Every child in the room must be accounted for before we archive it.
+        if (desired.size() < sourceChildren.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "All children must be reassigned before archiving the room");
+        }
+
+        // Validate each destination room's capacity against the incoming batch.
+        Map<UUID, Long> incoming = desired.values().stream()
+            .collect(Collectors.groupingBy(id -> id, Collectors.counting()));
+        Map<UUID, Room> targets = new HashMap<>();
+        for (Map.Entry<UUID, Long> e : incoming.entrySet()) {
+            Room target = roomRepository.findByIdAndNurseryId(e.getKey(), nurseryId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found"));
+            if (target.getArchivedAt() != null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Room " + target.getName() + " is archived");
+            }
+            long current = childRepository.countByRoomIdAndEnrollmentStatus(
+                target.getId(), EnrollmentStatus.ENROLLED);
+            if (current + e.getValue() > target.getCapacity()) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Room " + target.getName() + " is full (max " + target.getCapacity() + " children)");
+            }
+            targets.put(target.getId(), target);
+        }
+
+        // Apply the moves, then archive the emptied room.
+        desired.forEach((childId, targetRoomId) ->
+            childrenById.get(childId).setRoom(targets.get(targetRoomId)));
+        childRepository.saveAll(childrenById.values());
+
+        source.setArchivedAt(Instant.now());
+        roomRepository.save(source);
+        return toResponse(source);
     }
 
     @Transactional

@@ -83,6 +83,11 @@ public class User {
     @Builder.Default
     private boolean enabled = true;
 
+    // Soft-delete marker: when set, the teacher is removed from the nursery
+    // (hidden from all lists and unassigned from every room).
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

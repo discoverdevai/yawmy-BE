@@ -1,5 +1,6 @@
 package com.discoverdev.nms.admin;
 
+import com.discoverdev.nms.admin.dto.ArchiveRoomRequest;
 import com.discoverdev.nms.admin.dto.CreateRoomRequest;
 import com.discoverdev.nms.admin.dto.RoomResponse;
 import com.discoverdev.nms.admin.dto.UpdateRoomRequest;
@@ -56,6 +57,18 @@ public class AdminRoomController {
     @DeleteMapping("/{id}")
     public RoomResponse archive(@PathVariable UUID id) {
         return adminRoomService.archive(id);
+    }
+
+    /**
+     * Archive a room that still has children: reassign every child to another
+     * room and archive the source room in one atomic call.
+     */
+    @PostMapping("/{id}/archive")
+    public RoomResponse archiveWithReassignment(
+        @PathVariable UUID id,
+        @RequestBody ArchiveRoomRequest req
+    ) {
+        return adminRoomService.archiveWithReassignment(id, req);
     }
 
     @PostMapping("/{id}/restore")

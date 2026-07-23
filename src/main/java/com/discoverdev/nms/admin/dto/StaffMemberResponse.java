@@ -15,6 +15,7 @@ public record StaffMemberResponse(
     String fullName,
     String email,
     Role role,
+    String staffRole,
     String jobTitle,
     String imageUrl,
     String status

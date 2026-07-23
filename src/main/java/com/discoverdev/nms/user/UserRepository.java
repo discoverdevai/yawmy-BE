@@ -19,6 +19,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     List<User> findByNurseryIdAndRoleAndEnabledTrueOrderByFullNameAsc(UUID nurseryId, Role role);
 
-    // All users of a role in the nursery (enabled + pending), for the staff list.
-    List<User> findByNurseryIdAndRoleOrderByFullNameAsc(UUID nurseryId, Role role);
+    // Active (not soft-deleted) teachers only, for the assign/dropdown lists.
+    List<User> findByNurseryIdAndRoleAndEnabledTrueAndDeletedAtIsNullOrderByFullNameAsc(
+        UUID nurseryId, Role role);
+
+    // All non-deleted users of a role in the nursery (enabled + pending), for the staff list.
+    List<User> findByNurseryIdAndRoleAndDeletedAtIsNullOrderByFullNameAsc(UUID nurseryId, Role role);
 }

@@ -10,6 +10,7 @@ public record TeacherAssignmentResponse(
     String teacherName,
     String teacherEmail,
     boolean teacherEnabled,
+    String imageUrl,
     UUID roomId,
     String roomName,
     Instant createdAt
@@ -21,6 +22,7 @@ public record TeacherAssignmentResponse(
             a.getTeacher().getFullName(),
             a.getTeacher().getEmail(),
             a.getTeacher().isEnabled(),
+            a.getTeacher().getImageUrl(),
             a.getRoom().getId(),
             a.getRoom().getName(),
             a.getCreatedAt()

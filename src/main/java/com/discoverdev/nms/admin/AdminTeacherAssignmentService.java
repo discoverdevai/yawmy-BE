@@ -85,7 +85,7 @@ public class AdminTeacherAssignmentService {
     public List<TeacherResponse> listTeachers() {
         UUID nurseryId = TenantContext.currentNurseryId();
         return userRepository
-            .findByNurseryIdAndRoleAndEnabledTrueOrderByFullNameAsc(nurseryId, Role.TEACHER)
+            .findByNurseryIdAndRoleAndEnabledTrueAndDeletedAtIsNullOrderByFullNameAsc(nurseryId, Role.TEACHER)
             .stream()
             .map(TeacherResponse::of)
             .toList();
