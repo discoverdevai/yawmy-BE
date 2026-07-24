@@ -22,6 +22,7 @@ public class MediaWriter {
 
     static final long MAX_PHOTO_BYTES = 5L * 1024 * 1024;
     static final long MAX_VIDEO_BYTES = 50L * 1024 * 1024;
+    static final long MAX_DOC_BYTES = 25L * 1024 * 1024;
 
     static final Map<String, String> PHOTO_EXT = Map.of(
         "image/jpeg", "jpg",
@@ -34,11 +35,21 @@ public class MediaWriter {
         "video/quicktime", "mov"
     );
 
+    // Documents: PDF, Excel (xlsx/xls) and Word (docx/doc).
+    static final Map<String, String> DOC_EXT = Map.of(
+        "application/pdf", "pdf",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx",
+        "application/vnd.ms-excel", "xls",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx",
+        "application/msword", "doc"
+    );
+
     static final Set<String> ALL_TYPES;
     static {
         ALL_TYPES = new java.util.HashSet<>();
         ALL_TYPES.addAll(PHOTO_EXT.keySet());
         ALL_TYPES.addAll(VIDEO_EXT.keySet());
+        ALL_TYPES.addAll(DOC_EXT.keySet());
     }
 
     private final MediaItemRepository repository;
@@ -67,6 +78,13 @@ public class MediaWriter {
         return write(nursery, null, room, files, caption, uploader);
     }
 
+    /** Nursery-scoped media not tied to a child or room (e.g. announcement attachments). */
+    public BulkUploadResponse writeForNursery(
+        Nursery nursery, List<MultipartFile> files, String caption, User uploader
+    ) {
+        return write(nursery, null, null, files, caption, uploader);
+    }
+
     private BulkUploadResponse write(
         Nursery nursery, Child child, Room room,
         List<MultipartFile> files, String caption, User uploader
@@ -88,14 +106,27 @@ public class MediaWriter {
                         "unsupported content type: " + contentType));
                     continue;
                 }
-                boolean isPhoto = PHOTO_EXT.containsKey(contentType);
-                long limit = isPhoto ? MAX_PHOTO_BYTES : MAX_VIDEO_BYTES;
+                MediaType type;
+                String ext;
+                long limit;
+                if (PHOTO_EXT.containsKey(contentType)) {
+                    type = MediaType.PHOTO;
+                    ext = PHOTO_EXT.get(contentType);
+                    limit = MAX_PHOTO_BYTES;
+                } else if (VIDEO_EXT.containsKey(contentType)) {
+                    type = MediaType.VIDEO;
+                    ext = VIDEO_EXT.get(contentType);
+                    limit = MAX_VIDEO_BYTES;
+                } else {
+                    type = MediaType.DOCUMENT;
+                    ext = DOC_EXT.get(contentType);
+                    limit = MAX_DOC_BYTES;
+                }
                 if (file.getSize() > limit) {
                     failed.add(new BulkUploadResponse.FailedUpload(name,
                         String.format("exceeds %d MB limit", limit / (1024 * 1024))));
                     continue;
                 }
-                String ext = isPhoto ? PHOTO_EXT.get(contentType) : VIDEO_EXT.get(contentType);
                 UUID storageId = UUID.randomUUID();
                 String key = "media/" + nursery.getId() + "/" + storageId + "." + ext;
                 storage.store(key, file.getInputStream(), file.getSize(), contentType);
@@ -105,7 +136,7 @@ public class MediaWriter {
                     .uploader(uploader)
                     .child(child)
                     .room(room)
-                    .type(isPhoto ? MediaType.PHOTO : MediaType.VIDEO)
+                    .type(type)
                     .storageKey(key)
                     .contentType(contentType)
                     .sizeBytes(file.getSize())

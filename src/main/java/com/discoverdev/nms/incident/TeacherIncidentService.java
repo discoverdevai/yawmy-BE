@@ -57,6 +57,7 @@ public class TeacherIncidentService {
             .room(child.getRoom())
             .author(teacher)
             .incidentAt(req.incidentAt())
+            .incidentType(req.incidentType())
             .description(req.description())
             .actionTaken(req.actionTaken())
             .injuryArea(req.injuryArea())
@@ -79,6 +80,7 @@ public class TeacherIncidentService {
                 "Incident already acknowledged by a parent and cannot be edited — ask an admin");
         }
         if (req.incidentAt() != null) incident.setIncidentAt(req.incidentAt());
+        if (req.incidentType() != null) incident.setIncidentType(req.incidentType());
         if (req.description() != null) incident.setDescription(req.description());
         if (req.actionTaken() != null) incident.setActionTaken(req.actionTaken());
         if (req.injuryArea() != null) incident.setInjuryArea(req.injuryArea());

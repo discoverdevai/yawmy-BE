@@ -92,26 +92,26 @@ public class SuperAdminNurseryService {
     @Transactional
     public NurseryResponse create(CreateNurseryRequest req) {
         Nursery nursery = Nursery.builder().name(req.name()).build();
-        return NurseryResponse.of(nurseryRepository.save(nursery));
+        return NurseryResponse.of(nurseryRepository.save(nursery), null);
     }
 
     @Transactional(readOnly = true)
     public List<NurseryResponse> list() {
         return nurseryRepository.findAllByOrderByNameAsc().stream()
-            .map(NurseryResponse::of)
+            .map(n -> NurseryResponse.of(n, null))
             .toList();
     }
 
     @Transactional(readOnly = true)
     public NurseryResponse get(UUID id) {
-        return NurseryResponse.of(load(id));
+        return NurseryResponse.of(load(id), null);
     }
 
     @Transactional
     public NurseryResponse rename(UUID id, RenameNurseryRequest req) {
         Nursery nursery = load(id);
         nursery.setName(req.name());
-        return NurseryResponse.of(nurseryRepository.save(nursery));
+        return NurseryResponse.of(nurseryRepository.save(nursery), null);
     }
 
     /**

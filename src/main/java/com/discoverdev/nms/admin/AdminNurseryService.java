@@ -22,7 +22,12 @@ public class AdminNurseryService {
 
     @Transactional(readOnly = true)
     public NurseryResponse getCurrent() {
-        return NurseryResponse.of(loadCurrent());
+        return toResponse(loadCurrent());
+    }
+
+    // joinedAt = the current admin's account creation date (when they were invited).
+    private NurseryResponse toResponse(Nursery nursery) {
+        return NurseryResponse.of(nursery, TenantContext.currentUser().getCreatedAt());
     }
 
     @Transactional
@@ -39,7 +44,7 @@ public class AdminNurseryService {
             && !nursery.getHoursEnd().isAfter(nursery.getHoursStart())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "hoursEnd must be after hoursStart");
         }
-        return NurseryResponse.of(nurseryRepository.save(nursery));
+        return toResponse(nurseryRepository.save(nursery));
     }
 
     @Transactional
@@ -48,7 +53,8 @@ public class AdminNurseryService {
         nursery.setGeofenceLat(req.lat());
         nursery.setGeofenceLng(req.lng());
         nursery.setGeofenceRadiusM(req.radiusM());
-        return NurseryResponse.of(nurseryRepository.save(nursery));
+        if (req.locationText() != null) nursery.setLocationText(req.locationText());
+        return toResponse(nurseryRepository.save(nursery));
     }
 
     private Nursery loadCurrent() {

@@ -6,6 +6,7 @@ import java.time.Instant;
 
 public record UpdateIncidentRequest(
     @PastOrPresent Instant incidentAt,
+    @Size(min = 1, max = 100) String incidentType,
     @Size(min = 1, max = 2000) String description,
     @Size(max = 2000) String actionTaken,
     @Size(max = 100) String injuryArea

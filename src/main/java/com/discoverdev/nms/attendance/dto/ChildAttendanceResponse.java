@@ -12,6 +12,7 @@ import java.util.UUID;
 public record ChildAttendanceResponse(
     UUID childId,
     String childName,
+    String photoUrl,
     UUID roomId,
     String roomName,
     LocalDate date,
@@ -36,6 +37,7 @@ public record ChildAttendanceResponse(
         return new ChildAttendanceResponse(
             child.getId(),
             child.getFullName(),
+            child.getPhotoKey() != null ? "/api/files/children/" + child.getId() + "/photo" : null,
             child.getRoom() != null ? child.getRoom().getId() : null,
             child.getRoom() != null ? child.getRoom().getName() : null,
             date,

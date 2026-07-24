@@ -106,7 +106,8 @@ public class AdminStaffService {
             t.getStaffRole() != null ? t.getStaffRole().name() : null,
             t.getStaffRole() != null ? t.getStaffRole().getLabel() : null,
             t.getImageUrl(),
-            statusOf(t));
+            statusOf(t),
+            t.getCreatedAt());
     }
 
     private User loadTeacher(UUID id) {

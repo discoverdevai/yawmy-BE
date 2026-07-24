@@ -69,6 +69,10 @@ public class Nursery {
     @Column(name = "hours_end")
     private LocalTime hoursEnd;
 
+    // Human-readable address/place name for the geofence center (optional).
+    @Column(name = "location_text", length = 300)
+    private String locationText;
+
     @Column(name = "geofence_lat")
     private Double geofenceLat;
 

@@ -53,6 +53,17 @@ public class AdminMediaController {
         return service.uploadForRoom(roomId, files, caption, principal.getUser());
     }
 
+    /** Upload announcement attachments (nursery-scoped). Returns the created media ids. */
+    @PostMapping("/announcements/media")
+    @ResponseStatus(HttpStatus.CREATED)
+    public BulkUploadResponse uploadForAnnouncement(
+        @RequestParam("files") List<MultipartFile> files,
+        @RequestParam(value = "caption", required = false) String caption,
+        @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        return service.uploadForAnnouncement(files, caption, principal.getUser());
+    }
+
     @DeleteMapping("/media/{mediaId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID mediaId) {

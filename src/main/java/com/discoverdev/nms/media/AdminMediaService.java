@@ -68,6 +68,15 @@ public class AdminMediaService {
         return writer.writeForRoom(nursery, room, files, caption, admin);
     }
 
+    /** Upload announcement attachments — nursery-scoped, not tied to a child or room. */
+    @Transactional
+    public BulkUploadResponse uploadForAnnouncement(List<MultipartFile> files, String caption, User admin) {
+        UUID nurseryId = TenantContext.currentNurseryId();
+        Nursery nursery = nurseryRepository.findById(nurseryId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nursery not found"));
+        return writer.writeForNursery(nursery, files, caption, admin);
+    }
+
     @Transactional
     public void delete(UUID mediaId) {
         UUID nurseryId = TenantContext.currentNurseryId();

@@ -80,6 +80,15 @@ public class TeacherMediaService {
         return writer.writeForRoom(nursery, room, files, caption, teacher);
     }
 
+    /** Upload announcement attachments — nursery-scoped, not tied to a child or room. */
+    @Transactional
+    public BulkUploadResponse uploadForAnnouncement(List<MultipartFile> files, String caption, User teacher) {
+        UUID nurseryId = teacher.getNursery().getId();
+        Nursery nursery = nurseryRepository.findById(nurseryId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nursery not found"));
+        return writer.writeForNursery(nursery, files, caption, teacher);
+    }
+
     @Transactional
     public void delete(UUID mediaId, User teacher) {
         MediaItem item = repository.findByIdAndDeletedAtIsNull(mediaId)

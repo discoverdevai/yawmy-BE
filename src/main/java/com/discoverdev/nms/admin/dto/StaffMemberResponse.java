@@ -1,6 +1,7 @@
 package com.discoverdev.nms.admin.dto;
 
 import com.discoverdev.nms.user.Role;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -18,5 +19,6 @@ public record StaffMemberResponse(
     String staffRole,
     String jobTitle,
     String imageUrl,
-    String status
+    String status,
+    Instant joinedAt
 ) {}

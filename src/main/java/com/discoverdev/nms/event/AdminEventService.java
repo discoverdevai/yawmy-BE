@@ -10,7 +10,9 @@ import com.discoverdev.nms.nursery.Room;
 import com.discoverdev.nms.nursery.RoomRepository;
 import com.discoverdev.nms.tenant.TenantContext;
 import com.discoverdev.nms.user.User;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
@@ -44,39 +46,22 @@ public class AdminEventService {
         UUID nurseryId = TenantContext.currentNurseryId();
         Nursery nursery = nurseryRepository.findById(nurseryId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nursery not found"));
-        if (!req.endsAt().isAfter(req.startsAt())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "endsAt must be after startsAt");
-        }
-        Room room = null;
-        if (req.scope() == AnnouncementScope.ROOM) {
-            if (req.roomId() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "roomId is required for ROOM-scoped events");
-            }
-            room = roomRepository.findByIdAndNurseryId(req.roomId(), nurseryId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found"));
-        }
-        if (req.eventType() == EventType.RECURRING
-            && (req.recurrenceRule() == null || req.recurrenceRule().isBlank())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "recurrenceRule required for RECURRING events");
-        }
+        Instant startsAt = req.eventDate().atTime(req.eventTime()).toInstant(ZoneOffset.UTC);
         NurseryEvent saved = repository.save(NurseryEvent.builder()
             .nursery(nursery)
             .author(author)
-            .scope(req.scope())
-            .room(room)
+            .scope(AnnouncementScope.NURSERY)
             .eventType(req.eventType())
             .title(req.title())
             .description(req.description())
-            .location(req.location())
-            .startsAt(req.startsAt())
-            .endsAt(req.endsAt())
-            .recurrenceRule(req.recurrenceRule())
+            .eventDate(req.eventDate())
+            .eventTime(req.eventTime())
+            .startsAt(startsAt)
+            .endsAt(startsAt.plus(Duration.ofHours(1)))
             .build());
         events.publishEvent(new EventCreatedEvent(
             nurseryId, saved.getId(), saved.getScope(),
-            room != null ? room.getId() : null, saved.getStartsAt(), author.getId()
+            null, saved.getStartsAt(), author.getId()
         ));
         return EventResponse.of(saved, false, null);
     }
@@ -86,13 +71,13 @@ public class AdminEventService {
         NurseryEvent e = loadOwned(id);
         if (req.title() != null) e.setTitle(req.title());
         if (req.description() != null) e.setDescription(req.description());
-        if (req.location() != null) e.setLocation(req.location());
         if (req.eventType() != null) e.setEventType(req.eventType());
-        if (req.startsAt() != null) e.setStartsAt(req.startsAt());
-        if (req.endsAt() != null) e.setEndsAt(req.endsAt());
-        if (req.recurrenceRule() != null) e.setRecurrenceRule(req.recurrenceRule());
-        if (!e.getEndsAt().isAfter(e.getStartsAt())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "endsAt must be after startsAt");
+        if (req.eventDate() != null) e.setEventDate(req.eventDate());
+        if (req.eventTime() != null) e.setEventTime(req.eventTime());
+        if (e.getEventDate() != null && e.getEventTime() != null) {
+            Instant startsAt = e.getEventDate().atTime(e.getEventTime()).toInstant(ZoneOffset.UTC);
+            e.setStartsAt(startsAt);
+            e.setEndsAt(startsAt.plus(Duration.ofHours(1)));
         }
         return EventResponse.of(repository.save(e), false, null);
     }

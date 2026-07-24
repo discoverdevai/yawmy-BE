@@ -63,6 +63,9 @@ public class IncidentReport {
     @Column(name = "incident_at", nullable = false)
     private Instant incidentAt;
 
+    @Column(name = "incident_type", length = 100)
+    private String incidentType;
+
     @Column(nullable = false, length = 2000)
     private String description;
 

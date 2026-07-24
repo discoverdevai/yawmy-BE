@@ -37,6 +37,7 @@ public class ParentAnnouncementService {
         this.events = events;
     }
 
+    /** Combined feed: nursery-wide announcements plus those for the parent's children's rooms. */
     @Transactional(readOnly = true)
     public List<AnnouncementResponse> listForParent(User parent) {
         UUID nurseryId = parent.getNursery().getId();
@@ -49,13 +50,38 @@ public class ParentAnnouncementService {
         return items.stream().map(a -> toResponse(a, parent)).toList();
     }
 
-    @Transactional
+    /** Nursery-wide announcements only. */
+    @Transactional(readOnly = true)
+    public List<AnnouncementResponse> listNurseryWide(User parent) {
+        UUID nurseryId = parent.getNursery().getId();
+        return repository.findByNurseryIdOrderByCreatedAtDesc(nurseryId).stream()
+            .filter(a -> a.getScope() == AnnouncementScope.NURSERY)
+            .map(a -> toResponse(a, parent))
+            .toList();
+    }
+
+    /** Room-scoped announcements for the parent's children's rooms only. */
+    @Transactional(readOnly = true)
+    public List<AnnouncementResponse> listForRooms(User parent) {
+        UUID nurseryId = parent.getNursery().getId();
+        Set<UUID> roomIds = enrolledRoomIds(parent);
+        if (roomIds.isEmpty()) return List.of();
+        return repository.findVisibleToRooms(nurseryId, roomIds).stream()
+            .filter(a -> a.getScope() == AnnouncementScope.ROOM)
+            .map(a -> toResponse(a, parent))
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
     public AnnouncementResponse get(UUID id, User parent) {
+        return toResponse(loadAccessible(id, parent), parent);
+    }
+
+    /** Parent opened the announcement — record a one-per-user "seen" (idempotent). */
+    @Transactional
+    public AnnouncementResponse markSeen(UUID id, User parent) {
         Announcement ann = loadAccessible(id, parent);
-        AnnouncementSeen existing = seenRepository
-            .findByAnnouncementIdAndUserId(ann.getId(), parent.getId())
-            .orElse(null);
-        if (existing == null) {
+        if (!seenRepository.existsByAnnouncementIdAndUserId(ann.getId(), parent.getId())) {
             seenRepository.save(AnnouncementSeen.builder()
                 .announcement(ann)
                 .user(parent)

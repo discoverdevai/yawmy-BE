@@ -72,6 +72,8 @@ public class AdminAnnouncementService {
             .room(room)
             .title(req.title())
             .body(req.body())
+            .announcementDate(req.announcementDate())
+            .announcementTime(req.announcementTime())
             .links(req.links() != null ? new ArrayList<>(req.links()) : new ArrayList<>())
             .attachments(attachments)
             .build());
@@ -87,6 +89,37 @@ public class AdminAnnouncementService {
         Announcement ann = loadOwned(id);
         if (req.title() != null) ann.setTitle(req.title());
         if (req.body() != null) ann.setBody(req.body());
+        if (req.announcementDate() != null) ann.setAnnouncementDate(req.announcementDate());
+        if (req.announcementTime() != null) ann.setAnnouncementTime(req.announcementTime());
+        // Change share-with (scope / target room).
+        if (req.scope() != null) {
+            if (req.scope() == AnnouncementScope.ROOM) {
+                UUID roomId = req.roomId() != null ? req.roomId()
+                    : (ann.getRoom() != null ? ann.getRoom().getId() : null);
+                if (roomId == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "roomId is required for ROOM-scoped announcements");
+                }
+                Room room = roomRepository.findByIdAndNurseryId(roomId, ann.getNursery().getId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found"));
+                if (room.getArchivedAt() != null) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "Room is archived");
+                }
+                ann.setScope(AnnouncementScope.ROOM);
+                ann.setRoom(room);
+            } else {
+                ann.setScope(AnnouncementScope.NURSERY);
+                ann.setRoom(null);
+            }
+        } else if (req.roomId() != null && ann.getScope() == AnnouncementScope.ROOM) {
+            // Same scope, just retarget to a different room.
+            Room room = roomRepository.findByIdAndNurseryId(req.roomId(), ann.getNursery().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found"));
+            if (room.getArchivedAt() != null) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Room is archived");
+            }
+            ann.setRoom(room);
+        }
         if (req.links() != null) ann.setLinks(new ArrayList<>(req.links()));
         if (req.attachmentMediaIds() != null) {
             ann.setAttachments(resolveAttachments(req.attachmentMediaIds(), ann.getNursery().getId()));

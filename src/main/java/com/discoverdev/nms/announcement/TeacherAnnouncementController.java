@@ -61,4 +61,19 @@ public class TeacherAnnouncementController {
     ) {
         return service.listForRoom(roomId, principal.getUser());
     }
+
+    @GetMapping("/announcements/{id}")
+    public AnnouncementResponse get(
+        @PathVariable UUID id, @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        return service.get(id, principal.getUser());
+    }
+
+    /** Teacher opened an announcement — records this teacher as having seen it. */
+    @PostMapping("/announcements/{id}/seen")
+    public AnnouncementResponse markSeen(
+        @PathVariable UUID id, @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        return service.markSeen(id, principal.getUser());
+    }
 }

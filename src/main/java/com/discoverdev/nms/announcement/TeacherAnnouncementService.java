@@ -11,8 +11,10 @@ import com.discoverdev.nms.nursery.Room;
 import com.discoverdev.nms.nursery.RoomRepository;
 import com.discoverdev.nms.tenant.TeacherAccessService;
 import com.discoverdev.nms.user.User;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
@@ -74,6 +76,8 @@ public class TeacherAnnouncementService {
             .room(room)
             .title(req.title())
             .body(req.body())
+            .announcementDate(req.announcementDate())
+            .announcementTime(req.announcementTime())
             .links(req.links() != null ? new ArrayList<>(req.links()) : new ArrayList<>())
             .attachments(attachments)
             .build());
@@ -92,12 +96,13 @@ public class TeacherAnnouncementService {
         }
         if (req.title() != null) ann.setTitle(req.title());
         if (req.body() != null) ann.setBody(req.body());
+        if (req.announcementDate() != null) ann.setAnnouncementDate(req.announcementDate());
+        if (req.announcementTime() != null) ann.setAnnouncementTime(req.announcementTime());
         if (req.links() != null) ann.setLinks(new ArrayList<>(req.links()));
         if (req.attachmentMediaIds() != null) {
             ann.setAttachments(resolveAttachments(req.attachmentMediaIds(), ann.getNursery().getId()));
         }
-        long count = seenRepository.countByAnnouncementId(ann.getId());
-        return AnnouncementResponse.of(repository.save(ann), count, false, null);
+        return toResponse(repository.save(ann), teacher);
     }
 
     @Transactional
@@ -110,20 +115,38 @@ public class TeacherAnnouncementService {
         repository.delete(ann);
     }
 
+    /** Opening a room's announcements shows nursery-wide announcements plus that room's. */
     @Transactional(readOnly = true)
     public List<AnnouncementResponse> listForRoom(UUID roomId, User teacher) {
         if (!teacherAccess.canAccessRoom(teacher, roomId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found");
         }
         UUID nurseryId = teacher.getNursery().getId();
-        return repository.findByNurseryIdAndRoomIdOrderByCreatedAtDesc(nurseryId, roomId).stream()
-            .map(a -> {
-                long count = seenRepository.countByAnnouncementId(a.getId());
-                return AnnouncementResponse.of(a, count, false, null);
-            })
+        return repository.findVisibleToRooms(nurseryId, Set.of(roomId)).stream()
+            .map(a -> toResponse(a, teacher))
             .toList();
     }
 
+    @Transactional(readOnly = true)
+    public AnnouncementResponse get(UUID id, User teacher) {
+        return toResponse(loadVisible(id, teacher), teacher);
+    }
+
+    /** Teacher opened the announcement — record a one-per-user "seen" (idempotent). */
+    @Transactional
+    public AnnouncementResponse markSeen(UUID id, User teacher) {
+        Announcement ann = loadVisible(id, teacher);
+        if (!seenRepository.existsByAnnouncementIdAndUserId(ann.getId(), teacher.getId())) {
+            seenRepository.save(AnnouncementSeen.builder()
+                .announcement(ann)
+                .user(teacher)
+                .seenAt(Instant.now())
+                .build());
+        }
+        return toResponse(ann, teacher);
+    }
+
+    /** Author-only access for edit/delete: must be a ROOM announcement the teacher can reach. */
     private Announcement loadAccessible(UUID id, User teacher) {
         UUID nurseryId = teacher.getNursery().getId();
         Announcement ann = repository.findByIdAndNurseryId(id, nurseryId)
@@ -133,6 +156,26 @@ public class TeacherAnnouncementService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Announcement not found");
         }
         return ann;
+    }
+
+    /** Read access for view/seen: any nursery-wide announcement, or a ROOM one the teacher can reach. */
+    private Announcement loadVisible(UUID id, User teacher) {
+        UUID nurseryId = teacher.getNursery().getId();
+        Announcement ann = repository.findByIdAndNurseryId(id, nurseryId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Announcement not found"));
+        if (ann.getScope() == AnnouncementScope.ROOM
+            && (ann.getRoom() == null || !teacherAccess.canAccessRoom(teacher, ann.getRoom().getId()))) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Announcement not found");
+        }
+        return ann;
+    }
+
+    private AnnouncementResponse toResponse(Announcement a, User teacher) {
+        long count = seenRepository.countByAnnouncementId(a.getId());
+        AnnouncementSeen mine = seenRepository
+            .findByAnnouncementIdAndUserId(a.getId(), teacher.getId())
+            .orElse(null);
+        return AnnouncementResponse.of(a, count, mine != null, mine != null ? mine.getSeenAt() : null);
     }
 
     private List<MediaItem> resolveAttachments(List<UUID> ids, UUID nurseryId) {

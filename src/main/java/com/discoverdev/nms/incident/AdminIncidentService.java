@@ -56,6 +56,7 @@ public class AdminIncidentService {
             .room(child.getRoom())
             .author(author)
             .incidentAt(req.incidentAt())
+            .incidentType(req.incidentType())
             .description(req.description())
             .actionTaken(req.actionTaken())
             .injuryArea(req.injuryArea())
@@ -71,6 +72,7 @@ public class AdminIncidentService {
     public IncidentResponse update(UUID incidentId, UpdateIncidentRequest req) {
         IncidentReport incident = loadOwned(incidentId);
         if (req.incidentAt() != null) incident.setIncidentAt(req.incidentAt());
+        if (req.incidentType() != null) incident.setIncidentType(req.incidentType());
         if (req.description() != null) incident.setDescription(req.description());
         if (req.actionTaken() != null) incident.setActionTaken(req.actionTaken());
         if (req.injuryArea() != null) incident.setInjuryArea(req.injuryArea());

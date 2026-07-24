@@ -58,7 +58,7 @@ public class NurseryLogoService {
         }
         nursery.setLogoKey(key);
         nursery.setLogoUrl("/api/files/nursery/" + nursery.getId() + "/logo");
-        return NurseryResponse.of(nurseryRepository.save(nursery));
+        return NurseryResponse.of(nurseryRepository.save(nursery), TenantContext.currentUser().getCreatedAt());
     }
 
     @Transactional(readOnly = true)

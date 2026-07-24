@@ -4,6 +4,8 @@ import com.discoverdev.nms.announcement.Announcement;
 import com.discoverdev.nms.announcement.AnnouncementScope;
 import com.discoverdev.nms.media.MediaItem;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -16,6 +18,8 @@ public record AnnouncementResponse(
     String authorName,
     String title,
     String body,
+    LocalDate announcementDate,
+    LocalTime announcementTime,
     List<String> links,
     List<AttachmentRef> attachments,
     long seenCount,
@@ -42,6 +46,8 @@ public record AnnouncementResponse(
             a.getAuthor().getFullName(),
             a.getTitle(),
             a.getBody(),
+            a.getAnnouncementDate(),
+            a.getAnnouncementTime(),
             a.getLinks() != null ? a.getLinks() : List.of(),
             refs,
             seenCount,

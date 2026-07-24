@@ -4,6 +4,8 @@ import com.discoverdev.nms.announcement.AnnouncementScope;
 import com.discoverdev.nms.event.EventType;
 import com.discoverdev.nms.event.NurseryEvent;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.UUID;
 
 public record EventResponse(
@@ -15,6 +17,9 @@ public record EventResponse(
     String title,
     String description,
     String location,
+    String imageUrl,
+    LocalDate eventDate,
+    LocalTime eventTime,
     Instant startsAt,
     Instant endsAt,
     String recurrenceRule,
@@ -35,6 +40,9 @@ public record EventResponse(
             e.getTitle(),
             e.getDescription(),
             e.getLocation(),
+            e.getImageKey() != null ? "/api/files/events/" + e.getId() + "/image" : null,
+            e.getEventDate(),
+            e.getEventTime(),
             e.getStartsAt(),
             e.getEndsAt(),
             e.getRecurrenceRule(),

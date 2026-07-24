@@ -8,6 +8,7 @@ import java.time.Instant;
 
 public record CreateIncidentRequest(
     @NotNull @PastOrPresent Instant incidentAt,
+    @NotBlank @Size(max = 100) String incidentType,
     @NotBlank @Size(max = 2000) String description,
     @Size(max = 2000) String actionTaken,
     @Size(max = 100) String injuryArea

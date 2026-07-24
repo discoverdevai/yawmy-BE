@@ -16,6 +16,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -73,6 +75,17 @@ public class NurseryEvent {
 
     @Column(length = 200)
     private String location;
+
+    /** Single event image (one only). Served at /api/files/events/{id}/image. */
+    @Column(name = "image_key", length = 255)
+    private String imageKey;
+
+    /** Author-entered event date/time (source of truth for display). */
+    @Column(name = "event_date")
+    private LocalDate eventDate;
+
+    @Column(name = "event_time")
+    private LocalTime eventTime;
 
     @Column(name = "starts_at", nullable = false)
     private Instant startsAt;

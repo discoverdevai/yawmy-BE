@@ -20,6 +20,8 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -72,6 +74,13 @@ public class Announcement {
 
     @Column(nullable = false, length = 4000)
     private String body;
+
+    /** Author-entered date/time the announcement is about (distinct from createdAt). */
+    @Column(name = "announcement_date")
+    private LocalDate announcementDate;
+
+    @Column(name = "announcement_time")
+    private LocalTime announcementTime;
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(
