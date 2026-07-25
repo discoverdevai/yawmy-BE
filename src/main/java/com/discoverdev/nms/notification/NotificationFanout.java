@@ -30,6 +30,7 @@ import com.discoverdev.nms.media.MediaItemRepository;
 import com.discoverdev.nms.media.MediaUploadedEvent;
 import com.discoverdev.nms.nursery.Nursery;
 import com.discoverdev.nms.nursery.NurseryRepository;
+import com.discoverdev.nms.user.Role;
 import com.discoverdev.nms.user.User;
 import com.discoverdev.nms.user.UserRepository;
 import java.time.LocalTime;
@@ -218,19 +219,30 @@ public class NotificationFanout {
         Nursery nursery = nurseryRepository.findById(event.nurseryId()).orElse(null);
         if (nursery == null) return;
 
-        List<User> recipients;
-        if (event.scope() == AnnouncementScope.NURSERY) {
-            recipients = audience.adminsOfNursery(event.nurseryId()); // placeholder — really want all parents
-            // For NURSERY scope, every parent in the nursery is a recipient.
-            // Compose: all parents whose enrolled children are in any room of this nursery.
-            recipients = userRepository.findByNurseryIdAndRoleAndEnabledTrue(
-                event.nurseryId(), com.discoverdev.nms.user.Role.PARENT);
+        // Routing depends on WHO wrote it, not only on the scope. An admin is
+        // broadcasting down to the people in scope; a teacher is reporting up to
+        // the admins as well as out to their room's parents.
+        Role authorRole = ann.getAuthor() != null ? ann.getAuthor().getRole() : null;
+        List<User> recipients = new ArrayList<>();
+
+        if (authorRole == Role.TEACHER) {
+            // Teachers may only post ROOM-scoped announcements (enforced in
+            // TeacherAnnouncementService).
+            recipients.addAll(audience.adminsOfNursery(event.nurseryId()));
+            if (event.roomId() != null) {
+                recipients.addAll(audience.parentsInRoom(event.nurseryId(), event.roomId()));
+            }
+        } else if (event.scope() == AnnouncementScope.NURSERY) {
+            // Everyone in the nursery — teachers included, even ones who have
+            // not been assigned a room yet.
+            recipients.addAll(audience.allParentsOfNursery(event.nurseryId()));
+            recipients.addAll(audience.allTeachersOfNursery(event.nurseryId()));
         } else if (event.roomId() != null) {
-            recipients = audience.parentsInRoom(event.nurseryId(), event.roomId());
-        } else {
-            recipients = List.of();
+            recipients.addAll(audience.parentsInRoom(event.nurseryId(), event.roomId()));
+            recipients.addAll(audience.teachersOfRoom(event.roomId()));
         }
-        recipients = filterByAnnouncementPref(recipients);
+
+        recipients = filterByAnnouncementPref(dedupe(recipients));
 
         String title = ann.getTitle();
         String body = ann.getBody().length() > 200
@@ -248,15 +260,17 @@ public class NotificationFanout {
         Nursery nursery = nurseryRepository.findById(event.nurseryId()).orElse(null);
         if (nursery == null) return;
 
-        List<User> recipients;
+        // Events are always nursery-wide today (AdminEventService hardcodes
+        // NURSERY); the room branch is kept in case that ever changes.
+        List<User> recipients = new ArrayList<>();
         if (event.scope() == AnnouncementScope.NURSERY) {
-            recipients = userRepository.findByNurseryIdAndRoleAndEnabledTrue(
-                event.nurseryId(), com.discoverdev.nms.user.Role.PARENT);
+            recipients.addAll(audience.allParentsOfNursery(event.nurseryId()));
+            recipients.addAll(audience.allTeachersOfNursery(event.nurseryId()));
         } else if (event.roomId() != null) {
-            recipients = audience.parentsInRoom(event.nurseryId(), event.roomId());
-        } else {
-            recipients = List.of();
+            recipients.addAll(audience.parentsInRoom(event.nurseryId(), event.roomId()));
+            recipients.addAll(audience.teachersOfRoom(event.roomId()));
         }
+        recipients = dedupe(recipients);
 
         String title = "New event: " + ev.getTitle();
         String body = ev.getLocation() != null && !ev.getLocation().isBlank()

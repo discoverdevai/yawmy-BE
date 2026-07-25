@@ -1,12 +1,14 @@
 package com.discoverdev.nms.dailylog;
 
 import com.discoverdev.nms.auth.AppUserDetails;
+import com.discoverdev.nms.dailylog.dto.ChildLogStatusResponse;
 import com.discoverdev.nms.dailylog.dto.CreateLogEntryRequest;
 import com.discoverdev.nms.dailylog.dto.DailyLogResponse;
 import com.discoverdev.nms.dailylog.dto.DailyLogSummaryResponse;
 import com.discoverdev.nms.dailylog.dto.LogEntryResponse;
 import com.discoverdev.nms.dailylog.dto.PublishRequest;
 import com.discoverdev.nms.dailylog.dto.UpdateLogEntryRequest;
+import com.discoverdev.nms.dailylog.dto.UpsertDailyLogRequest;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -36,6 +39,21 @@ public class TeacherDailyLogController {
 
     public TeacherDailyLogController(TeacherDailyLogService service) {
         this.service = service;
+    }
+
+    /**
+     * Save a child's whole log for one date — what the app's "Save as Draft"
+     * and "Publish" buttons call. Replaces the day's entries, so a save that
+     * failed on poor wifi can be retried as-is.
+     */
+    @PutMapping("/children/{childId}/daily-logs/{date}")
+    public DailyLogResponse upsertLog(
+        @PathVariable UUID childId,
+        @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @Valid @RequestBody UpsertDailyLogRequest req,
+        @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        return service.upsertLog(childId, date, req, principal.getUser());
     }
 
     @PostMapping("/children/{childId}/log-entries")
@@ -89,6 +107,19 @@ public class TeacherDailyLogController {
     @GetMapping("/daily-logs/{logId}")
     public DailyLogResponse getLog(@PathVariable UUID logId, @AuthenticationPrincipal AppUserDetails principal) {
         return service.getById(logId, principal.getUser());
+    }
+
+    /**
+     * Every enrolled child in the room with their log state for the date —
+     * NOT_STARTED / DRAFT / COMPLETED. Backs the Logs screen list.
+     */
+    @GetMapping("/rooms/{roomId}/daily-logs/status")
+    public List<ChildLogStatusResponse> roomLogStatus(
+        @PathVariable UUID roomId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        return service.roomLogStatus(roomId, date, principal.getUser());
     }
 
     @GetMapping("/children/{childId}/daily-logs")

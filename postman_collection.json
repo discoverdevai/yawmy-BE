@@ -203,7 +203,7 @@
                 "resend"
               ]
             },
-            "description": "Reactivate a pending admin **by user id** — issues a fresh 48h invite token and re-emails the link.\n\nPrefer **Resend Invite (by email)** when acting on a reactivation request, since the notification gives you the email, not the id.\n\n**Response (201)** saves the new `{{inviteToken}}`.\nErrors: 404 (user not found), 400 (not an admin), 409 (already activated)."
+            "description": "Reactivate a pending admin **by user id** — issues a fresh 48h invite token and re-emails the link.\n\nPrefer **Resend Invite (by email)** when acting on a reactivation request, since the notification gives you the email, not the id.\n\n**Response (201)** saves the new `{{inviteToken}}`.\nErrors: 404 (user not found), 400 (not an admin), 409 (already activated).\n\n---\n**CHANGED this release** — now accepts **TEACHER** as well as ADMIN, and picks the invite link and email template by role — a resent teacher invite previously carried the admin app's deep link, which the teacher app cannot open."
           },
           "event": [
             {
@@ -584,7 +584,7 @@
                 "me"
               ]
             },
-            "description": "Returns the currently authenticated user's profile: `id`, `email`, `fullName`, `role`, `locale`. Useful for the frontend to render role-aware UI without decoding the JWT."
+            "description": "Returns the currently authenticated user's profile: `id`, `email`, `fullName`, `role`, `locale`. Useful for the frontend to render role-aware UI without decoding the JWT.\n\n---\n**CHANGED this release** — the response now also returns `imageUrl`, `staffRole` and `jobTitle` (\"Lead Teacher\"), which the teacher app's Home header needs."
           }
         },
         {
@@ -1943,6 +1943,32 @@
           ]
         },
         {
+          "name": "Staff",
+          "item": [
+            {
+              "name": "NEW · Resend Invite",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/staff/{{teacherId}}/resend-invite",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "staff",
+                    "{{teacherId}}",
+                    "resend-invite"
+                  ]
+                },
+                "description": "**NEW** — email a fresh 48-hour invite to a teacher who hasn't activated yet. Fixes an `INVITATION_EXPIRED` (or `PENDING`) row in the staff list.\n\nThis closes a dead end: `POST /api/admin/invites` rejects the same teacher with `409 Email already registered`, because their user row is created the moment they are first invited. Before this endpoint, an expired teacher invite could not be recovered by anyone without direct database access.\n\nAny admin of that nursery can call it — not only the one who sent the original invite. Nursery-scoped, so another nursery's teacher returns 404.\n\n**Responses**\n- `204` — new invite emailed with the **teacher** app's deep link\n- `409` — \"This teacher has already activated their account.\"\n- `404` — not a teacher in your nursery"
+              }
+            }
+          ]
+        },
+        {
           "name": "Users",
           "description": "Account control: enable/disable users without rotating credentials. Disabling is the canonical revocation mechanism for non-expiring access tokens.",
           "item": [
@@ -2853,8 +2879,136 @@
       "description": "Teacher-only endpoints. Each teacher can only act on children whose current room they're assigned to via `Admin / Teachers / Assign Teacher to Room`. Cross-room access returns 404.\n\n**Publish model**: each `LogEntry` carries its own `publishedAt` state. Teachers can publish entries individually OR batch-publish all DRAFT entries in a daily log. Each publish event fires `DailyLogEntriesPublishedEvent` — the Notifications slice (later) will fan that out to push.",
       "item": [
         {
+          "name": "Rooms",
+          "item": [
+            {
+              "name": "NEW · My Rooms",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/rooms",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "rooms"
+                  ]
+                },
+                "description": "**NEW** — the signed-in teacher's assigned rooms.\n\nEvery other `/api/teacher/**` endpoint is keyed by `roomId` or `childId`; this is how the app discovers those ids. Backs the Home screen: the room switcher only appears when this returns more than one room.\n\n**Response 200** `[{ id, name, imageUrl, childCount }]`\n- `childCount` counts ENROLLED children only — the roster size, and the denominator for attendance.\n- Archived rooms and rooms outside the teacher's nursery are excluded.\n- **An empty array is normal**, not an error: a teacher who has just activated has no rooms until an admin assigns them. The app shows a \"No rooms assigned yet\" state.\n\nAuto-saves the first room id into `{{roomId}}`."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const rooms = pm.response.json();",
+                      "  if (Array.isArray(rooms) && rooms.length) {",
+                      "    pm.collectionVariables.set('roomId', rooms[0].id);",
+                      "  }",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "NEW · Room Sessions (by date)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/sessions?date=2026-05-22",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "rooms",
+                    "{{roomId}}",
+                    "sessions"
+                  ],
+                  "query": [
+                    {
+                      "key": "date",
+                      "value": "2026-05-22",
+                      "description": "ISO date"
+                    }
+                  ]
+                },
+                "description": "**NEW** — the schedule for one of the teacher's rooms on a date, earliest first. Backs the Home timeline.\n\n**Response 200** `[{ id, roomId, name, date, startTime, endTime, teacherId, teacherName }]`\n\n`404 Room not found` if the room isn't assigned to this teacher — deliberately 404 rather than 403, so room ids in other nurseries can't be probed."
+              }
+            }
+          ]
+        },
+        {
           "name": "Daily Logs",
           "item": [
+            {
+              "name": "NEW · Save Log (Draft or Publish)",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/children/{{childId}}/daily-logs/2026-05-22",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "children",
+                    "{{childId}}",
+                    "daily-logs",
+                    "2026-05-22"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"publish\": false,\n  \"entries\": [\n    {\n      \"category\": \"MOOD\",\n      \"entryTime\": \"09:15:00\",\n      \"title\": \"Happy\"\n    },\n    {\n      \"category\": \"MEAL\",\n      \"entryTime\": \"12:00:00\",\n      \"title\": \"Lunch\",\n      \"detail\": \"Ate most of it\"\n    },\n    {\n      \"category\": \"NAP\",\n      \"entryTime\": \"13:00:00\",\n      \"title\": \"Slept well\",\n      \"napMinutes\": 45\n    },\n    {\n      \"category\": \"DIAPER\",\n      \"entryTime\": \"10:30:00\",\n      \"title\": \"Changed\"\n    },\n    {\n      \"category\": \"ACTIVITY\",\n      \"entryTime\": \"11:00:00\",\n      \"title\": \"Painting\"\n    }\n  ]\n}"
+                },
+                "description": "**NEW** — saves a child's whole log for one date in a single call. This is what the app's **Save as Draft** / **Publish** buttons hit; the per-entry endpoints below stay for fine-grained edits.\n\nKeyed by `childId` + date, so the app never needs a `dailyLogId`. Creates the `DailyLog` on first save.\n\n**Body**\n- `publish` — `false` = Save as Draft, `true` = Publish\n- `entries[]` — `category` (`MOOD`/`MEAL`/`NAP`/`DIAPER`/`ACTIVITY`/`MEDICATION`), `entryTime` (`HH:mm:ss`), `title` (max 200), `detail` (optional, max 2000), `napMinutes` (optional)\n\n**Semantics**\n- **Replaces** the day's entries rather than merging — the form owns the whole day. That makes the call **idempotent**, so the app's offline outbox can retry a failed save without duplicating anything.\n- **Never retracts.** If the log already has published entries, `publish: false` is coerced to publish — a parent who has seen the day cannot be un-told. The app hides \"Save as Draft\" once published; this is the backstop for a stale client.\n- Fires the same publish event as the other endpoints, so parent notifications still work.\n\n**Response 200** the full `DailyLogResponse` with its entries."
+              }
+            },
+            {
+              "name": "NEW · Room Log Status (Logs screen list)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/teacher/rooms/{{roomId}}/daily-logs/status?date=2026-05-22",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "teacher",
+                    "rooms",
+                    "{{roomId}}",
+                    "daily-logs",
+                    "status"
+                  ],
+                  "query": [
+                    {
+                      "key": "date",
+                      "value": "2026-05-22",
+                      "description": "ISO date"
+                    }
+                  ]
+                },
+                "description": "**NEW** — every enrolled child in the room with their daily-log state for the date. Backs the Logs screen list.\n\nUse this rather than **Room Feed**: that one starts from existing `DailyLog` rows, so a child with nothing written yet does not appear at all — and those are exactly the ones the teacher still has to do. This starts from the room roster and left-joins the logs.\n\n**Response 200** `[{ childId, childName, photoUrl, logId, status, totalEntries, publishedEntries, updatedAt }]`\n\n**`status`**\n- `NOT_STARTED` — no log, or a log with no entries. `logId` is null. Screen shows the empty form with **Save as Draft** + **Publish**.\n- `DRAFT` — entries saved, none published. Parent sees nothing yet. Same two buttons.\n- `COMPLETED` — at least one entry published, so the parent can see the day. Screen shows a single **Update Logs** button.\n\nOpen a child's log with `GET /api/teacher/children/{childId}/daily-logs?date=` (404 when NOT_STARTED — treat as an empty form), and save with `PUT /api/teacher/children/{childId}/daily-logs/{date}`."
+              }
+            },
             {
               "name": "Add Entry",
               "request": {

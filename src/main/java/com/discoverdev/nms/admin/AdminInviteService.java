@@ -61,7 +61,7 @@ public class AdminInviteService {
         }
 
         // Email the invite link — teacher-app link for teachers, admin-app link for admins.
-        String link = buildLink(req.role(), issued.token());
+        String link = inviteProperties.linkFor(req.role(), issued.token());
         if (req.role() == Role.TEACHER) {
             mailService.sendStaffInvite(issued.email(), req.fullName(), link);
         } else if (req.role() == Role.ADMIN) {
@@ -78,11 +78,4 @@ public class AdminInviteService {
         );
     }
 
-    private String buildLink(Role role, String token) {
-        String base = role == Role.TEACHER
-            ? inviteProperties.teacherLinkBaseUrl()
-            : inviteProperties.linkBaseUrl();
-        String sep = base != null && base.contains("?") ? "&" : "?";
-        return base + sep + "token=" + token;
-    }
 }

@@ -44,7 +44,7 @@ public class SuperAdminNurseryService {
         this.userRepository = userRepository;
     }
 
-    /** Reactivate a pending admin by user id: issue a fresh token and re-email it. */
+    /** Reactivate a pending admin or teacher by user id: issue a fresh token and re-email it. */
     @Transactional
     public CreateInviteResponse resendInvite(UUID userId, User superAdmin) {
         User user = userRepository.findById(userId)
@@ -53,26 +53,40 @@ public class SuperAdminNurseryService {
     }
 
     /**
-     * Reactivate a pending admin by their email — the value from the reactivation
-     * notification, so the root admin doesn't need to look up a user id.
+     * Reactivate a pending admin or teacher by their email — the value from the
+     * reactivation notification, so the root admin doesn't need to look up a user id.
      */
     @Transactional
     public CreateInviteResponse resendInvite(String email, User superAdmin) {
         User user = userRepository.findByEmailIgnoreCase(email)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                "No pending admin found with this email"));
+                "No pending invite found with this email"));
         return resendFor(user, superAdmin);
     }
 
     private CreateInviteResponse resendFor(User user, User superAdmin) {
-        if (user.getRole() != Role.ADMIN) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User is not an admin");
+        // Teachers as well as admins: a teacher whose 48-hour invite lapsed had no
+        // way back in before this — the nursery admin cannot re-invite them either,
+        // because their user row already exists from the original invite.
+        if (user.getRole() != Role.ADMIN && user.getRole() != Role.TEACHER) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Only admin and teacher invites can be resent");
         }
         if (user.isEnabled()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Admin already activated");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This account is already activated");
         }
+
         UserInvitationFactory.IssuedInvite issued = invitationFactory.reissueInvite(user, superAdmin);
-        mailService.sendAdminInvite(issued.email(), user.getFullName(), buildInviteLink(issued.token()));
+
+        // Each app has its own deep-link scheme, so the link and the wording have
+        // to follow the invitee's role — a teacher cannot open an admin-app link.
+        String link = inviteProperties.linkFor(user.getRole(), issued.token());
+        if (user.getRole() == Role.TEACHER) {
+            mailService.sendStaffInvite(issued.email(), user.getFullName(), link);
+        } else {
+            mailService.sendAdminInvite(issued.email(), user.getFullName(), link);
+        }
+
         return new CreateInviteResponse(
             issued.inviteId(),
             issued.userId(),
@@ -81,12 +95,6 @@ public class SuperAdminNurseryService {
             issued.token(),
             issued.expiresAt()
         );
-    }
-
-    private String buildInviteLink(String token) {
-        String base = inviteProperties.linkBaseUrl();
-        String sep = base != null && base.contains("?") ? "&" : "?";
-        return base + sep + "token=" + token;
     }
 
     @Transactional
@@ -131,7 +139,7 @@ public class SuperAdminNurseryService {
             nursery,
             superAdmin
         );
-        mailService.sendAdminInvite(issued.email(), req.fullName(), buildInviteLink(issued.token()));
+        mailService.sendAdminInvite(issued.email(), req.fullName(), inviteProperties.linkFor(Role.ADMIN, issued.token()));
         return new CreateInviteResponse(
             issued.inviteId(),
             issued.userId(),

@@ -77,11 +77,33 @@ public class AuthService {
                 "This account is already active. Please sign in instead.");
         }
 
-        List<User> superAdmins = userRepository.findByRole(Role.SUPER_ADMIN);
-        for (User superAdmin : superAdmins) {
-            mailService.sendReactivationNotice(superAdmin.getEmail(), user.getEmail(), message);
+        // Notify whoever can actually re-issue the invite. For a teacher that is the
+        // admins of their own nursery — they sent the invite and they own the staff
+        // list. Super-admins are the fallback, and remain the only route for a
+        // pending admin, whose nursery has no active admin yet.
+        String nurseryName = user.getNursery() != null ? user.getNursery().getName() : null;
+        List<User> recipients = List.of();
+        if (user.getRole() == Role.TEACHER && user.getNursery() != null) {
+            recipients = userRepository
+                .findByNurseryIdAndRoleAndEnabledTrueAndDeletedAtIsNullOrderByFullNameAsc(
+                    user.getNursery().getId(), Role.ADMIN);
         }
-        log.info("Reactivation requested for {} -> notified {} super-admin(s)", email, superAdmins.size());
+        String audience = "nursery admin(s)";
+        if (recipients.isEmpty()) {
+            recipients = userRepository.findByRole(Role.SUPER_ADMIN);
+            audience = "super-admin(s)";
+        }
+
+        for (User recipient : recipients) {
+            mailService.sendReactivationNotice(
+                recipient.getEmail(), user.getEmail(), roleLabel(user.getRole()), nurseryName, message);
+        }
+        log.info("Reactivation requested for {} ({}) -> notified {} {}",
+            email, user.getRole(), recipients.size(), audience);
+    }
+
+    private static String roleLabel(Role role) {
+        return role == Role.TEACHER ? "teacher" : "admin";
     }
 
     @Transactional

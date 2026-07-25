@@ -3,15 +3,18 @@ package com.discoverdev.nms.admin;
 import com.discoverdev.nms.admin.dto.StaffMemberResponse;
 import com.discoverdev.nms.admin.dto.StaffRoleOption;
 import com.discoverdev.nms.admin.dto.UpdateStaffRequest;
+import com.discoverdev.nms.auth.AppUserDetails;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -51,6 +54,19 @@ public class AdminStaffController {
     @PatchMapping("/{id}")
     public StaffMemberResponse update(@PathVariable UUID id, @Valid @RequestBody UpdateStaffRequest req) {
         return service.update(id, req);
+    }
+
+    /**
+     * Email a fresh invite to a teacher who hasn't activated yet — the fix for an
+     * INVITATION_EXPIRED row in the staff list.
+     */
+    @PostMapping("/{id}/resend-invite")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resendInvite(
+        @PathVariable UUID id,
+        @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        service.resendInvite(id, principal.getUser());
     }
 
     /** Fully remove a teacher from the nursery (soft-delete + unassign all rooms). */

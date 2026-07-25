@@ -44,9 +44,7 @@ public class AdminGuardianService {
     }
 
     private String buildParentInviteLink(String token) {
-        String base = inviteProperties.parentLinkBaseUrl();
-        String sep = base != null && base.contains("?") ? "&" : "?";
-        return base + sep + "token=" + token;
+        return inviteProperties.linkFor(Role.PARENT, token);
     }
 
     @Transactional

@@ -45,19 +45,35 @@ public class MailService {
         send(toEmail, subject, body);
     }
 
-    public void sendReactivationNotice(String toSuperAdmin, String requesterEmail, String message) {
+    /**
+     * Tell whoever can re-issue an invite that an invitee's link lapsed.
+     * {@code roleLabel} is "teacher" or "admin"; {@code nurseryName} may be null.
+     */
+    public void sendReactivationNotice(
+        String toEmail,
+        String requesterEmail,
+        String roleLabel,
+        String nurseryName,
+        String message
+    ) {
         String subject = "Invite reactivation requested";
+        String where = (nurseryName != null && !nurseryName.isBlank())
+            ? "\nNursery: " + nurseryName
+            : "";
         String extra = (message != null && !message.isBlank())
             ? "\n\nMessage from the requester:\n" + message
             : "";
+        String how = "teacher".equals(roleLabel)
+            ? "To reactivate, open the staff list and use \"Resend invite\" for this teacher."
+            : "To reactivate, issue a fresh invite for this account.";
         String body = """
-            An invited admin reports their invitation has expired and asks to be re-invited.
+            An invited %s reports their invitation has expired and asks to be re-invited.
 
-            Requester email: %s%s
+            Requester email: %s%s%s
 
-            To reactivate, issue a fresh invite for this account.
-            """.formatted(requesterEmail, extra);
-        send(toSuperAdmin, subject, body);
+            %s
+            """.formatted(roleLabel, requesterEmail, where, extra, how);
+        send(toEmail, subject, body);
     }
 
     public void sendStaffInvite(String toEmail, String fullName, String inviteLink) {

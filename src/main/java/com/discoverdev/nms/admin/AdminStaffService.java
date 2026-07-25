@@ -5,6 +5,9 @@ import com.discoverdev.nms.admin.dto.StaffRoleOption;
 import com.discoverdev.nms.admin.dto.UpdateStaffRequest;
 import com.discoverdev.nms.auth.Invite;
 import com.discoverdev.nms.auth.InviteRepository;
+import com.discoverdev.nms.auth.MailService;
+import com.discoverdev.nms.auth.UserInvitationFactory;
+import com.discoverdev.nms.config.InviteProperties;
 import com.discoverdev.nms.nursery.TeacherRoomAssignmentRepository;
 import com.discoverdev.nms.tenant.TenantContext;
 import com.discoverdev.nms.user.Role;
@@ -26,15 +29,46 @@ public class AdminStaffService {
     private final UserRepository userRepository;
     private final InviteRepository inviteRepository;
     private final TeacherRoomAssignmentRepository assignmentRepository;
+    private final UserInvitationFactory invitationFactory;
+    private final MailService mailService;
+    private final InviteProperties inviteProperties;
 
     public AdminStaffService(
         UserRepository userRepository,
         InviteRepository inviteRepository,
-        TeacherRoomAssignmentRepository assignmentRepository
+        TeacherRoomAssignmentRepository assignmentRepository,
+        UserInvitationFactory invitationFactory,
+        MailService mailService,
+        InviteProperties inviteProperties
     ) {
         this.userRepository = userRepository;
         this.inviteRepository = inviteRepository;
         this.assignmentRepository = assignmentRepository;
+        this.invitationFactory = invitationFactory;
+        this.mailService = mailService;
+        this.inviteProperties = inviteProperties;
+    }
+
+    /**
+     * Issue a fresh invite for a teacher who has not activated yet, and email it.
+     *
+     * The nursery admin owns this: they invited the teacher, they get told when the
+     * link lapses, and their teacher cannot be re-invited through
+     * {@code POST /api/admin/invites} because the user row already exists.
+     */
+    @Transactional
+    public void resendInvite(UUID id, User invitedBy) {
+        User teacher = loadTeacher(id); // nursery-scoped: cannot touch another nursery
+        if (teacher.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "This teacher has already activated their account.");
+        }
+        UserInvitationFactory.IssuedInvite issued = invitationFactory.reissueInvite(teacher, invitedBy);
+        mailService.sendStaffInvite(
+            issued.email(),
+            teacher.getFullName(),
+            inviteProperties.linkFor(Role.TEACHER, issued.token())
+        );
     }
 
     /** All (non-deleted) teachers in the nursery with their invitation status. */

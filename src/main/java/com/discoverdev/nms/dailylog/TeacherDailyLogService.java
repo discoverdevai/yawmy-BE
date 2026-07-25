@@ -2,20 +2,25 @@ package com.discoverdev.nms.dailylog;
 
 import com.discoverdev.nms.child.Child;
 import com.discoverdev.nms.child.ChildRepository;
+import com.discoverdev.nms.child.EnrollmentStatus;
+import com.discoverdev.nms.dailylog.dto.ChildLogStatusResponse;
 import com.discoverdev.nms.dailylog.dto.CreateLogEntryRequest;
 import com.discoverdev.nms.dailylog.dto.DailyLogResponse;
 import com.discoverdev.nms.dailylog.dto.DailyLogSummaryResponse;
 import com.discoverdev.nms.dailylog.dto.LogEntryResponse;
 import com.discoverdev.nms.dailylog.dto.PublishRequest;
 import com.discoverdev.nms.dailylog.dto.UpdateLogEntryRequest;
+import com.discoverdev.nms.dailylog.dto.UpsertDailyLogRequest;
 import com.discoverdev.nms.tenant.TeacherAccessService;
 import com.discoverdev.nms.user.User;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -43,6 +48,67 @@ public class TeacherDailyLogService {
         this.childRepository = childRepository;
         this.teacherAccess = teacherAccess;
         this.events = events;
+    }
+
+    /**
+     * Save a child's whole log for one date in a single call — what the app's
+     * "Save as Draft" / "Publish" buttons hit.
+     *
+     * The form owns the complete day, so the log's entries are REPLACED by the
+     * payload. That keeps the call idempotent: a save that failed on poor
+     * nursery wifi can be retried as-is without duplicating entries.
+     *
+     * A log that already has published entries is never retracted here. Once a
+     * parent has seen the day, saving again always republishes — you cannot
+     * un-tell them. The app hides "Save as Draft" for a published log; this
+     * coercion is the backstop for a stale or offline client.
+     */
+    @Transactional
+    public DailyLogResponse upsertLog(
+        UUID childId,
+        LocalDate date,
+        UpsertDailyLogRequest req,
+        User teacher
+    ) {
+        Child child = requireAccessibleChild(childId, teacher);
+        DailyLog log = dailyLogRepository.findByChildIdAndLogDate(child.getId(), date)
+            .orElseGet(() -> dailyLogRepository.save(
+                DailyLog.builder()
+                    .nursery(child.getNursery())
+                    .child(child)
+                    .logDate(date)
+                    .build()));
+
+        boolean alreadyPublished = entryRepository.countByDailyLogIdAndPublishedAtIsNotNull(log.getId()) > 0;
+        boolean publishNow = Boolean.TRUE.equals(req.publish()) || alreadyPublished;
+
+        entryRepository.deleteAll(entryRepository.findByDailyLogIdOrderByEntryTimeAscCreatedAtAsc(log.getId()));
+        // Flush the deletes before inserting so the replacement never collides
+        // with the rows it is replacing.
+        entryRepository.flush();
+
+        Instant now = Instant.now();
+        List<UUID> publishedIds = new ArrayList<>();
+        for (UpsertDailyLogRequest.Entry e : req.entries()) {
+            LogEntry.LogEntryBuilder builder = LogEntry.builder()
+                .dailyLog(log)
+                .category(e.category())
+                .entryTime(e.entryTime())
+                .author(teacher)
+                .title(e.title())
+                .detail(e.detail())
+                .napMinutes(e.napMinutes());
+            if (publishNow) {
+                builder.publishedAt(now).publishedBy(teacher);
+            }
+            LogEntry saved = entryRepository.save(builder.build());
+            if (publishNow) publishedIds.add(saved.getId());
+        }
+
+        if (!publishedIds.isEmpty()) {
+            firePublishedEvent(log, publishedIds, teacher);
+        }
+        return loadLogResponse(log);
     }
 
     @Transactional
@@ -182,6 +248,61 @@ public class TeacherDailyLogService {
             .filter(l -> l.getChild().getRoom() != null
                 && roomId.equals(l.getChild().getRoom().getId()))
             .map(this::summary)
+            .toList();
+    }
+
+    /**
+     * Every enrolled child in the room with their log state for the date —
+     * what the Logs screen lists.
+     *
+     * The room feed above only returns children who already have a DailyLog
+     * row, so children with nothing written are invisible in it. Those are
+     * precisely the ones the teacher still has to do, so this starts from the
+     * roster and left-joins the logs.
+     */
+    @Transactional(readOnly = true)
+    public List<ChildLogStatusResponse> roomLogStatus(UUID roomId, LocalDate date, User teacher) {
+        if (!teacherAccess.canAccessRoom(teacher, roomId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found");
+        }
+        UUID nurseryId = teacher.getNursery().getId();
+
+        Map<UUID, DailyLog> logsByChild = dailyLogRepository
+            .findByNurseryIdAndLogDate(nurseryId, date).stream()
+            .filter(l -> l.getChild().getRoom() != null
+                && roomId.equals(l.getChild().getRoom().getId()))
+            .collect(Collectors.toMap(l -> l.getChild().getId(), l -> l, (a, b) -> a));
+
+        return childRepository
+            .findByNurseryIdAndRoomIdAndEnrollmentStatusOrderByFullNameAsc(
+                nurseryId, roomId, EnrollmentStatus.ENROLLED)
+            .stream()
+            .map(child -> {
+                DailyLog log = logsByChild.get(child.getId());
+                String photoUrl = child.getPhotoKey() != null
+                    ? "/api/files/children/" + child.getId() + "/photo"
+                    : null;
+
+                if (log == null) {
+                    return new ChildLogStatusResponse(
+                        child.getId(), child.getFullName(), photoUrl,
+                        null, ChildLogStatusResponse.NOT_STARTED, 0, 0, null);
+                }
+
+                long total = entryRepository.countByDailyLogId(log.getId());
+                long published = entryRepository.countByDailyLogIdAndPublishedAtIsNotNull(log.getId());
+                // A log row with no entries is still "not started" to the
+                // teacher — it can be left behind by a cleared draft.
+                String status = total == 0
+                    ? ChildLogStatusResponse.NOT_STARTED
+                    : published > 0
+                        ? ChildLogStatusResponse.COMPLETED
+                        : ChildLogStatusResponse.DRAFT;
+
+                return new ChildLogStatusResponse(
+                    child.getId(), child.getFullName(), photoUrl,
+                    log.getId(), status, total, published, log.getUpdatedAt());
+            })
             .toList();
     }
 
