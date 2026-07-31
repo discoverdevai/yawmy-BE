@@ -19,6 +19,10 @@ public interface IncidentReportRepository extends JpaRepository<IncidentReport, 
 
     List<IncidentReport> findByChildIdOrderByIncidentAtDesc(UUID childId);
 
+    /** One child's incidents within a day, for the history screen's date strip. */
+    List<IncidentReport> findByChildIdAndIncidentAtBetweenOrderByIncidentAtDesc(
+        UUID childId, Instant from, Instant to);
+
     List<IncidentReport> findByRoomIdOrderByIncidentAtDesc(UUID roomId);
 
     List<IncidentReport> findByRoomIdAndIncidentAtBetweenOrderByIncidentAtDesc(

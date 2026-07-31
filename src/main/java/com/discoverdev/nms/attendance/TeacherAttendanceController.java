@@ -47,6 +47,16 @@ public class TeacherAttendanceController {
         return service.checkOut(childId, req, principal.getUser());
     }
 
+    /** One child's attendance for a date, including who recorded each event. */
+    @GetMapping("/children/{childId}/attendance")
+    public ChildAttendanceResponse childAttendance(
+        @PathVariable UUID childId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        return service.childAttendance(childId, date, principal.getUser());
+    }
+
     @GetMapping("/rooms/{roomId}/attendance")
     public List<ChildAttendanceResponse> roomRoster(
         @PathVariable UUID roomId,

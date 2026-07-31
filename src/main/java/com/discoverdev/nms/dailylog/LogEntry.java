@@ -64,8 +64,35 @@ public class LogEntry {
     @Column(length = 2000)
     private String detail;
 
+    /** NAP only. Derived from the nap window on write, so readers need not subtract. */
     @Column(name = "nap_minutes")
     private Integer napMinutes;
+
+    // ---- structured answers, one set per category ---------------------------
+    // Stored as constants rather than the words shown on screen, so either app
+    // can be reworded without the two drifting apart or stored rows aging badly.
+
+    /** MOOD only. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mood", length = 24)
+    private MoodOption mood;
+
+    /** MEAL only — how much of it was eaten. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "meal_amount", length = 16)
+    private MealAmount mealAmount;
+
+    /** NAP only — the window the child actually slept for. */
+    @Column(name = "nap_start_time")
+    private LocalTime napStartTime;
+
+    @Column(name = "nap_end_time")
+    private LocalTime napEndTime;
+
+    /** NAP only — how the nap went. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "nap_quality", length = 16)
+    private NapQuality napQuality;
 
     @Column(name = "published_at")
     private Instant publishedAt;

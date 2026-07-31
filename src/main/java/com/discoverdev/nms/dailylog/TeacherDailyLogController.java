@@ -75,6 +75,17 @@ public class TeacherDailyLogController {
         return service.updateEntry(entryId, req, principal.getUser());
     }
 
+    /** Discard a child's unpublished log for a date. 409 once it is published. */
+    @DeleteMapping("/children/{childId}/daily-logs/{date}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteDraft(
+        @PathVariable UUID childId,
+        @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        service.deleteDraft(childId, date, principal.getUser());
+    }
+
     @DeleteMapping("/log-entries/{entryId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteEntry(@PathVariable UUID entryId, @AuthenticationPrincipal AppUserDetails principal) {

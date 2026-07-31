@@ -2,6 +2,7 @@ package com.discoverdev.nms.nursery;
 
 import com.discoverdev.nms.child.ChildRepository;
 import com.discoverdev.nms.child.EnrollmentStatus;
+import com.discoverdev.nms.nursery.dto.RoomChildResponse;
 import com.discoverdev.nms.nursery.dto.TeacherRoomResponse;
 import com.discoverdev.nms.schedule.RoomSessionRepository;
 import com.discoverdev.nms.schedule.dto.SessionResponse;
@@ -65,6 +66,29 @@ public class TeacherRoomService {
                 room,
                 childRepository.countByRoomIdAndEnrollmentStatus(room.getId(), EnrollmentStatus.ENROLLED)
             ))
+            .toList();
+    }
+
+    /**
+     * The children enrolled in one of the teacher's rooms, by name.
+     *
+     * Unlike the attendance roster this carries no date and no attendance
+     * state — it answers "who is in this room", which is what the media and
+     * daily-log pickers actually ask. Unenrolled children are left out.
+     */
+    @Transactional(readOnly = true)
+    public List<RoomChildResponse> roomChildren(UUID roomId, User teacher) {
+        if (!teacherAccess.canAccessRoom(teacher, roomId)) {
+            // 404 rather than 403, so a teacher cannot probe which room ids
+            // exist in other nurseries.
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found");
+        }
+        UUID nurseryId = teacher.getNursery().getId();
+        return childRepository
+            .findByNurseryIdAndRoomIdAndEnrollmentStatusOrderByFullNameAsc(
+                nurseryId, roomId, EnrollmentStatus.ENROLLED)
+            .stream()
+            .map(RoomChildResponse::of)
             .toList();
     }
 

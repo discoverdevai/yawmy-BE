@@ -8,9 +8,11 @@ import com.discoverdev.nms.incident.dto.AcknowledgmentRow;
 import com.discoverdev.nms.incident.dto.CreateIncidentRequest;
 import com.discoverdev.nms.incident.dto.IncidentResponse;
 import com.discoverdev.nms.incident.dto.UpdateIncidentRequest;
+import com.discoverdev.nms.attendance.AttendanceDates;
 import com.discoverdev.nms.tenant.TeacherAccessService;
 import com.discoverdev.nms.user.User;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -93,11 +95,21 @@ public class TeacherIncidentService {
     }
 
     @Transactional(readOnly = true)
-    public List<IncidentResponse> listForChild(UUID childId, User teacher) {
-        requireAccessibleChild(childId, teacher);
-        return incidentRepository.findByChildIdOrderByIncidentAtDesc(childId).stream()
-            .map(this::toResponse)
-            .toList();
+    /**
+     * A child's incidents, newest first — the whole history, or a single day.
+     *
+     * The day is bounded in the NURSERY's timezone, not the server's, so an
+     * incident logged at 11pm in Cairo belongs to that day rather than the next.
+     */
+    public List<IncidentResponse> listForChild(UUID childId, LocalDate date, User teacher) {
+        Child child = requireAccessibleChild(childId, teacher);
+        List<IncidentReport> found = date == null
+            ? incidentRepository.findByChildIdOrderByIncidentAtDesc(childId)
+            : incidentRepository.findByChildIdAndIncidentAtBetweenOrderByIncidentAtDesc(
+                childId,
+                AttendanceDates.startOfDay(child.getNursery(), date),
+                AttendanceDates.startOfNextDay(child.getNursery(), date));
+        return found.stream().map(this::toResponse).toList();
     }
 
     @Transactional(readOnly = true)

@@ -6,8 +6,10 @@ import com.discoverdev.nms.incident.dto.CreateIncidentRequest;
 import com.discoverdev.nms.incident.dto.IncidentResponse;
 import com.discoverdev.nms.incident.dto.UpdateIncidentRequest;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -57,11 +60,14 @@ public class TeacherIncidentController {
         return service.get(incidentId, principal.getUser());
     }
 
+    /** A child's incidents, newest first. Omit {@code date} for the whole history. */
     @GetMapping("/children/{childId}/incidents")
     public List<IncidentResponse> listForChild(
-        @PathVariable UUID childId, @AuthenticationPrincipal AppUserDetails principal
+        @PathVariable UUID childId,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @AuthenticationPrincipal AppUserDetails principal
     ) {
-        return service.listForChild(childId, principal.getUser());
+        return service.listForChild(childId, date, principal.getUser());
     }
 
     @GetMapping("/rooms/{roomId}/incidents")

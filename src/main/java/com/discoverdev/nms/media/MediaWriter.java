@@ -13,8 +13,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.TransactionException;
 import org.springframework.web.multipart.MultipartFile;
 
 @Component
@@ -52,16 +56,21 @@ public class MediaWriter {
         ALL_TYPES.addAll(DOC_EXT.keySet());
     }
 
+    private static final Logger log = LoggerFactory.getLogger(MediaWriter.class);
+
     private final MediaItemRepository repository;
+    private final MediaItemPersister persister;
     private final MediaStorage storage;
     private final ApplicationEventPublisher events;
 
     public MediaWriter(
         MediaItemRepository repository,
+        MediaItemPersister persister,
         MediaStorage storage,
         ApplicationEventPublisher events
     ) {
         this.repository = repository;
+        this.persister = persister;
         this.storage = storage;
         this.events = events;
     }
@@ -142,13 +151,21 @@ public class MediaWriter {
                     .sizeBytes(file.getSize())
                     .caption(caption)
                     .build();
-                MediaItem saved = repository.save(item);
+                MediaItem saved;
+                try {
+                    saved = persister.saveNow(item);
+                } catch (RuntimeException e) {
+                    // The bytes are already on disk. Drop them so a row the
+                    // database refused doesn't leave an unreferenced file behind.
+                    discard(key);
+                    throw e;
+                }
                 uploaded.add(MediaItemResponse.of(saved));
                 savedIds.add(saved.getId());
             } catch (IOException e) {
                 failed.add(new BulkUploadResponse.FailedUpload(name, "storage failure: " + e.getMessage()));
             } catch (RuntimeException e) {
-                failed.add(new BulkUploadResponse.FailedUpload(name, e.getMessage()));
+                failed.add(new BulkUploadResponse.FailedUpload(name, reasonFor(name, e)));
             }
         }
 
@@ -162,6 +179,29 @@ public class MediaWriter {
             ));
         }
         return new BulkUploadResponse(uploaded, failed);
+    }
+
+    /**
+     * Why a single file failed, in words the uploader can act on. The apps show
+     * this string verbatim, and a database message would hand them the failing
+     * SQL statement and the schema — so those get logged, not returned.
+     */
+    private String reasonFor(String name, RuntimeException e) {
+        if (e instanceof DataAccessException || e instanceof TransactionException) {
+            log.error("Database rejected the row for '{}': {}", name, e.getMessage(), e);
+            return "could not be saved — please try again";
+        }
+        String message = e.getMessage();
+        return message == null || message.isBlank() ? "could not be uploaded" : message;
+    }
+
+    /** Best-effort cleanup — a leftover blob must never fail the upload itself. */
+    private void discard(String key) {
+        try {
+            storage.delete(key);
+        } catch (IOException | RuntimeException e) {
+            log.warn("Could not remove orphaned upload {}: {}", key, e.getMessage());
+        }
     }
 
     public void softDelete(MediaItem item) {

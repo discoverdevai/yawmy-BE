@@ -1,6 +1,7 @@
 package com.discoverdev.nms.dailylog.dto;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -18,6 +19,8 @@ public record ChildLogStatusResponse(
     UUID childId,
     String childName,
     String photoUrl,
+    /** The app shows the child's age beside their name, and derives it from this. */
+    LocalDate dob,
     UUID logId,
     String status,
     long totalEntries,

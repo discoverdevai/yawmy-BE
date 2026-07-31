@@ -113,6 +113,19 @@ public class TeacherAttendanceService {
         return out;
     }
 
+    /**
+     * One child's attendance for a date, with the day's events.
+     *
+     * The child profile needs this on its own rather than by filtering the room
+     * roster — and it needs the events, since the card names who checked the
+     * child in and when. Unlike the roster, these are ordered by the query, so
+     * "the last event decides the status" is guaranteed rather than incidental.
+     */
+    @Transactional(readOnly = true)
+    public ChildAttendanceResponse childAttendance(UUID childId, LocalDate date, User teacher) {
+        return getForDate(requireAccessibleChild(childId, teacher), date);
+    }
+
     private ChildAttendanceResponse getForDate(Child child, LocalDate date) {
         Nursery nursery = child.getNursery();
         List<AttendanceEvent> dayEvents = eventRepository

@@ -1,6 +1,7 @@
 package com.discoverdev.nms.nursery;
 
 import com.discoverdev.nms.auth.AppUserDetails;
+import com.discoverdev.nms.nursery.dto.RoomChildResponse;
 import com.discoverdev.nms.nursery.dto.TeacherRoomResponse;
 import com.discoverdev.nms.schedule.dto.SessionResponse;
 import java.time.LocalDate;
@@ -34,6 +35,18 @@ public class TeacherRoomController {
     @GetMapping
     public List<TeacherRoomResponse> myRooms(@AuthenticationPrincipal AppUserDetails principal) {
         return service.myRooms(principal.getUser());
+    }
+
+    /**
+     * The children enrolled in the room, by name. No date and no attendance
+     * state — this is the plain roster the media and log pickers need.
+     */
+    @GetMapping("/{roomId}/children")
+    public List<RoomChildResponse> children(
+        @PathVariable UUID roomId,
+        @AuthenticationPrincipal AppUserDetails principal
+    ) {
+        return service.roomChildren(roomId, principal.getUser());
     }
 
     /** Sessions scheduled in the room on {@code date} (yyyy-MM-dd), earliest first. */
