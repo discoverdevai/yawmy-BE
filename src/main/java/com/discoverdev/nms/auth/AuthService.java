@@ -212,11 +212,13 @@ public class AuthService {
         }
 
         User user = invite.getUser();
+        String nurseryName = user.getNursery() != null ? user.getNursery().getName() : null;
         return new InviteValidationResponse(
             status,
             user.getEmail(),
             user.getFullName(),
             user.getRole(),
+            nurseryName,
             invite.getExpiresAt()
         );
     }
