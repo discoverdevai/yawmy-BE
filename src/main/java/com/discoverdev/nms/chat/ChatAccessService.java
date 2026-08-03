@@ -54,6 +54,45 @@ public class ChatAccessService {
         this.teacherRoomRepository = teacherRoomRepository;
     }
 
+    /**
+     * The member's thread with the nursery's admins. Teachers and parents pass
+     * themselves; an admin passes the teacher or parent whose thread they want.
+     * Every enabled admin is (re)joined on each call, so someone hired today can
+     * answer a conversation that started last month.
+     */
+    @Transactional
+    public ChatThread openAdminSupport(User member) {
+        if (member.getRole() != Role.TEACHER && member.getRole() != Role.PARENT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "A support thread belongs to a teacher or a parent");
+        }
+        if (member.getNursery() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        }
+        UUID nurseryId = member.getNursery().getId();
+        Nursery nursery = nurseryRepository.findById(nurseryId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nursery not found"));
+
+        String key = ChatThread.buildSupportKey(member.getId());
+        ChatThread thread = threadRepository.findByNurseryIdAndDirectKey(nurseryId, key)
+            .orElseGet(() -> threadRepository.save(ChatThread.builder()
+                .nursery(nursery)
+                .type(ChatThreadType.ADMIN_SUPPORT)
+                .directKey(key)
+                .createdBy(member)
+                .build()));
+
+        ensureActiveParticipant(thread, member);
+        syncSupportAdmins(thread, nursery);
+        return thread;
+    }
+
+    /** The nursery side of a support thread, refreshed from the current admin roster. */
+    private void syncSupportAdmins(ChatThread thread, Nursery nursery) {
+        userRepository.findByNurseryIdAndRoleAndEnabledTrue(nursery.getId(), Role.ADMIN)
+            .forEach(admin -> ensureActiveParticipant(thread, admin));
+    }
+
     @Transactional
     public ChatThread openDirectAsParent(User parent, UUID otherUserId) {
         if (parent.getRole() != Role.PARENT) {
@@ -63,6 +102,10 @@ public class ChatAccessService {
         if (other.getRole() == Role.PARENT || other.getRole() == Role.SUPER_ADMIN) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "Parents may only DM teachers or admins in their nursery");
+        }
+        // Whichever admin the parent picked, it resolves to the one nursery thread.
+        if (other.getRole() == Role.ADMIN) {
+            return openAdminSupport(parent);
         }
         if (other.getRole() == Role.TEACHER) {
             Set<UUID> teacherRooms = roomsTaughtBy(other);
@@ -88,6 +131,10 @@ public class ChatAccessService {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "This parent has no child in any of your assigned rooms");
             }
+        } else if (other.getRole() == Role.ADMIN) {
+            // Same as for parents: one shared thread with the nursery, not a DM
+            // per admin. Teacher-to-teacher DMs stay ordinary DIRECT threads.
+            return openAdminSupport(teacher);
         } else if (other.getRole() == Role.SUPER_ADMIN) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "Cannot DM super admin");
@@ -103,6 +150,12 @@ public class ChatAccessService {
         User other = loadSameNursery(admin, otherUserId);
         if (other.getRole() == Role.SUPER_ADMIN) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot DM super admin");
+        }
+        // A teacher or parent sees one "Nursery Admin" conversation, so the admin
+        // has to land in that same thread rather than start a private one the
+        // rest of the admin team cannot see. Admin-to-admin stays a real DM.
+        if (other.getRole() == Role.TEACHER || other.getRole() == Role.PARENT) {
+            return openAdminSupport(other);
         }
         return openOrCreateDirect(admin, other);
     }
@@ -121,21 +174,28 @@ public class ChatAccessService {
         if (!teacherRoomRepository.existsByTeacherIdAndRoomId(teacher.getId(), roomId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found");
         }
-        ChatThread existing = threadRepository
-            .findByNurseryIdAndRoomIdAndType(nurseryId, roomId, ChatThreadType.ROOM_GROUP)
-            .orElse(null);
-        Nursery nursery = nurseryRepository.findById(nurseryId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Nursery not found"));
-        if (existing == null) {
-            existing = threadRepository.save(ChatThread.builder()
+        return ensureRoomGroup(room, teacher);
+    }
+
+    /**
+     * The room's group thread, created if this is the first time anyone asks, with
+     * its membership refreshed. No role check — callers have already established
+     * that this room is theirs to see, and rooms get one of these at creation so
+     * the chat list can show the group before a single message is sent.
+     */
+    @Transactional
+    public ChatThread ensureRoomGroup(Room room, User createdBy) {
+        Nursery nursery = room.getNursery();
+        ChatThread thread = threadRepository
+            .findByNurseryIdAndRoomIdAndType(nursery.getId(), room.getId(), ChatThreadType.ROOM_GROUP)
+            .orElseGet(() -> threadRepository.save(ChatThread.builder()
                 .nursery(nursery)
                 .type(ChatThreadType.ROOM_GROUP)
                 .room(room)
-                .createdBy(teacher)
-                .build());
-        }
-        syncRoomGroupParticipants(existing, room, nursery);
-        return existing;
+                .createdBy(createdBy)
+                .build()));
+        syncRoomGroupParticipants(thread, room, nursery);
+        return thread;
     }
 
     @Transactional
@@ -185,7 +245,11 @@ public class ChatAccessService {
         return existing;
     }
 
-    private void syncRoomGroupParticipants(ChatThread thread, Room room, Nursery nursery) {
+    void syncRoomGroupParticipants(ChatThread thread, Room room, Nursery nursery) {
+        // Every admin. They are in every room group, so a parent's question in the
+        // room chat never goes unanswered because the room's teacher is off today.
+        userRepository.findByNurseryIdAndRoleAndEnabledTrue(nursery.getId(), Role.ADMIN)
+            .forEach(admin -> ensureActiveParticipant(thread, admin));
         // Teachers assigned to this room
         teacherRoomRepository.findByRoomIdOrderByCreatedAtAsc(room.getId()).forEach(a ->
             ensureActiveParticipant(thread, a.getTeacher()));

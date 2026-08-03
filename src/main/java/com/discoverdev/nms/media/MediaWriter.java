@@ -27,6 +27,7 @@ public class MediaWriter {
     static final long MAX_PHOTO_BYTES = 5L * 1024 * 1024;
     static final long MAX_VIDEO_BYTES = 50L * 1024 * 1024;
     static final long MAX_DOC_BYTES = 25L * 1024 * 1024;
+    static final long MAX_AUDIO_BYTES = 15L * 1024 * 1024;
 
     static final Map<String, String> PHOTO_EXT = Map.of(
         "image/jpeg", "jpg",
@@ -48,12 +49,29 @@ public class MediaWriter {
         "application/msword", "doc"
     );
 
+    // Voice notes. React Native's recorder reports the container inconsistently
+    // across platforms and Expo versions — iOS sends audio/m4a or audio/x-m4a for
+    // the very same file Android labels audio/mp4 — so every spelling we have
+    // actually seen in the wild maps to the same extension.
+    static final Map<String, String> AUDIO_EXT = Map.ofEntries(
+        Map.entry("audio/m4a", "m4a"),
+        Map.entry("audio/x-m4a", "m4a"),
+        Map.entry("audio/mp4", "m4a"),
+        Map.entry("audio/aac", "m4a"),
+        Map.entry("audio/mpeg", "mp3"),
+        Map.entry("audio/wav", "wav"),
+        Map.entry("audio/x-wav", "wav"),
+        Map.entry("audio/webm", "webm"),
+        Map.entry("audio/ogg", "ogg")
+    );
+
     static final Set<String> ALL_TYPES;
     static {
         ALL_TYPES = new java.util.HashSet<>();
         ALL_TYPES.addAll(PHOTO_EXT.keySet());
         ALL_TYPES.addAll(VIDEO_EXT.keySet());
         ALL_TYPES.addAll(DOC_EXT.keySet());
+        ALL_TYPES.addAll(AUDIO_EXT.keySet());
     }
 
     private static final Logger log = LoggerFactory.getLogger(MediaWriter.class);
@@ -78,25 +96,40 @@ public class MediaWriter {
     public BulkUploadResponse writeForChild(
         Nursery nursery, Child child, List<MultipartFile> files, String caption, User uploader
     ) {
-        return write(nursery, child, null, files, caption, uploader);
+        return write(nursery, child, null, files, caption, uploader, null);
     }
 
     public BulkUploadResponse writeForRoom(
         Nursery nursery, Room room, List<MultipartFile> files, String caption, User uploader
     ) {
-        return write(nursery, null, room, files, caption, uploader);
+        return write(nursery, null, room, files, caption, uploader, null);
     }
 
     /** Nursery-scoped media not tied to a child or room (e.g. announcement attachments). */
     public BulkUploadResponse writeForNursery(
         Nursery nursery, List<MultipartFile> files, String caption, User uploader
     ) {
-        return write(nursery, null, null, files, caption, uploader);
+        return write(nursery, null, null, files, caption, uploader, null);
+    }
+
+    /**
+     * Chat attachments and voice notes. Deliberately not tied to a child or a
+     * room: a photo sent in a conversation is not a moment in the child's media
+     * feed, and filing it there would leak it to everyone who can read that feed.
+     *
+     * `durationMs` is what the recorder measured — the server never decodes the
+     * audio, so a client that reports nothing simply gets a player without a
+     * known length.
+     */
+    public BulkUploadResponse writeForChat(
+        Nursery nursery, List<MultipartFile> files, User uploader, Long durationMs
+    ) {
+        return write(nursery, null, null, files, null, uploader, durationMs);
     }
 
     private BulkUploadResponse write(
         Nursery nursery, Child child, Room room,
-        List<MultipartFile> files, String caption, User uploader
+        List<MultipartFile> files, String caption, User uploader, Long durationMs
     ) {
         List<MediaItemResponse> uploaded = new ArrayList<>();
         List<BulkUploadResponse.FailedUpload> failed = new ArrayList<>();
@@ -126,6 +159,10 @@ public class MediaWriter {
                     type = MediaType.VIDEO;
                     ext = VIDEO_EXT.get(contentType);
                     limit = MAX_VIDEO_BYTES;
+                } else if (AUDIO_EXT.containsKey(contentType)) {
+                    type = MediaType.AUDIO;
+                    ext = AUDIO_EXT.get(contentType);
+                    limit = MAX_AUDIO_BYTES;
                 } else {
                     type = MediaType.DOCUMENT;
                     ext = DOC_EXT.get(contentType);
@@ -150,6 +187,8 @@ public class MediaWriter {
                     .contentType(contentType)
                     .sizeBytes(file.getSize())
                     .caption(caption)
+                    .originalFilename(trimName(file.getOriginalFilename()))
+                    .durationMs(type == MediaType.AUDIO || type == MediaType.VIDEO ? durationMs : null)
                     .build();
                 MediaItem saved;
                 try {
@@ -193,6 +232,21 @@ public class MediaWriter {
         }
         String message = e.getMessage();
         return message == null || message.isBlank() ? "could not be uploaded" : message;
+    }
+
+    /**
+     * The uploader's filename, cut to the column width. Only the name is kept —
+     * some clients send a whole path, and the directories in it are no business
+     * of anyone reading the chat.
+     */
+    private String trimName(String original) {
+        if (original == null || original.isBlank()) return null;
+        String base = original.replace('\\', '/');
+        int slash = base.lastIndexOf('/');
+        if (slash >= 0) base = base.substring(slash + 1);
+        base = base.trim();
+        if (base.isEmpty()) return null;
+        return base.length() <= 255 ? base : base.substring(base.length() - 255);
     }
 
     /** Best-effort cleanup — a leftover blob must never fail the upload itself. */

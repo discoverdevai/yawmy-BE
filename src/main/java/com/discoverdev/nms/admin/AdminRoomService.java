@@ -4,6 +4,7 @@ import com.discoverdev.nms.admin.dto.ArchiveRoomRequest;
 import com.discoverdev.nms.admin.dto.CreateRoomRequest;
 import com.discoverdev.nms.admin.dto.RoomResponse;
 import com.discoverdev.nms.admin.dto.UpdateRoomRequest;
+import com.discoverdev.nms.chat.ChatAccessService;
 import com.discoverdev.nms.child.Child;
 import com.discoverdev.nms.child.ChildRepository;
 import com.discoverdev.nms.child.EnrollmentStatus;
@@ -33,17 +34,20 @@ public class AdminRoomService {
     private final NurseryRepository nurseryRepository;
     private final ChildRepository childRepository;
     private final AdminTeacherAssignmentService teacherAssignmentService;
+    private final ChatAccessService chatAccess;
 
     public AdminRoomService(
         RoomRepository roomRepository,
         NurseryRepository nurseryRepository,
         ChildRepository childRepository,
-        AdminTeacherAssignmentService teacherAssignmentService
+        AdminTeacherAssignmentService teacherAssignmentService,
+        ChatAccessService chatAccess
     ) {
         this.roomRepository = roomRepository;
         this.nurseryRepository = nurseryRepository;
         this.childRepository = childRepository;
         this.teacherAssignmentService = teacherAssignmentService;
+        this.chatAccess = chatAccess;
     }
 
     /** Room response with its current enrolled-child count. */
@@ -66,6 +70,11 @@ public class AdminRoomService {
             .capacity(req.capacity() != null ? req.capacity() : DEFAULT_CAPACITY)
             .build();
         room = roomRepository.save(room);
+
+        // Every room owns a group chat from the moment it exists, so it can be
+        // listed (and joined by whoever belongs in it) before anyone has sent a
+        // message. Without this the group only appears once a teacher opens it.
+        chatAccess.ensureRoomGroup(room, TenantContext.currentUser());
 
         // Optionally assign a teacher picked in the "add room" modal.
         if (req.teacherId() != null) {

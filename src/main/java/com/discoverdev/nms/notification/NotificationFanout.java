@@ -13,6 +13,7 @@ import com.discoverdev.nms.chat.ChatMessageSentEvent;
 import com.discoverdev.nms.chat.ChatParticipantRepository;
 import com.discoverdev.nms.chat.ChatThread;
 import com.discoverdev.nms.chat.ChatThreadType;
+import com.discoverdev.nms.chat.UserMuteRepository;
 import com.discoverdev.nms.child.Child;
 import com.discoverdev.nms.child.ChildRepository;
 import com.discoverdev.nms.dailylog.DailyLog;
@@ -30,15 +31,18 @@ import com.discoverdev.nms.media.MediaItemRepository;
 import com.discoverdev.nms.media.MediaUploadedEvent;
 import com.discoverdev.nms.nursery.Nursery;
 import com.discoverdev.nms.nursery.NurseryRepository;
+import com.discoverdev.nms.chat.dto.MessageResponse;
 import com.discoverdev.nms.user.Role;
 import com.discoverdev.nms.user.User;
 import com.discoverdev.nms.user.UserRepository;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -62,6 +66,7 @@ public class NotificationFanout {
     private final NurseryEventRepository eventRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatParticipantRepository chatParticipantRepository;
+    private final UserMuteRepository userMuteRepository;
 
     public NotificationFanout(
         NotificationRepository notificationRepository,
@@ -76,7 +81,8 @@ public class NotificationFanout {
         AnnouncementRepository announcementRepository,
         NurseryEventRepository eventRepository,
         ChatMessageRepository chatMessageRepository,
-        ChatParticipantRepository chatParticipantRepository
+        ChatParticipantRepository chatParticipantRepository,
+        UserMuteRepository userMuteRepository
     ) {
         this.notificationRepository = notificationRepository;
         this.prefRepository = prefRepository;
@@ -91,6 +97,7 @@ public class NotificationFanout {
         this.eventRepository = eventRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.chatParticipantRepository = chatParticipantRepository;
+        this.userMuteRepository = userMuteRepository;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -294,14 +301,31 @@ public class NotificationFanout {
             case DIRECT -> msg.getSender().getFullName();
             case ROOM_GROUP -> t.getRoom() != null ? (t.getRoom().getName() + " room") : "Room chat";
             case STAFF_GROUP -> "Staff chat";
+            // Both sides of a support thread see the other side's name for it: the
+            // family sees the nursery, the office sees the family.
+            case ADMIN_SUPPORT -> msg.getSender().getRole() == Role.ADMIN
+                ? "Nursery Admin"
+                : msg.getSender().getFullName();
         };
         String title = "New message in " + threadLabel;
-        String bodyPreview = msg.getBody().length() > 100
-            ? msg.getBody().substring(0, 100) + "…"
-            : msg.getBody();
-        String body = msg.getSender().getFullName() + ": " + bodyPreview;
+        // A voice note or a photo has no body at all, so this describes the
+        // attachment rather than dereferencing text that isn't there.
+        String bodyPreview = MessageResponse.previewOf(msg, 100);
+        String body = bodyPreview == null
+            ? msg.getSender().getFullName() + " sent a message"
+            : msg.getSender().getFullName() + ": " + bodyPreview;
+
+        // Who has muted this particular sender. Asked once for the whole thread
+        // rather than per recipient — a room group can hold thirty people.
+        Set<UUID> mutedTheSender = event.recipientUserIds().isEmpty()
+            ? Set.of()
+            : new HashSet<>(userMuteRepository.findMutersOf(
+                msg.getSender().getId(), event.recipientUserIds()));
 
         for (UUID userId : event.recipientUserIds()) {
+            // Muting a person suppresses the notification only. The message is
+            // still written to the thread and still shows up when they open it.
+            if (mutedTheSender.contains(userId)) continue;
             chatParticipantRepository.findByThreadIdAndUserId(t.getId(), userId).ifPresent(p -> {
                 if (p.isMuted()) return;
                 User recipient = p.getUser();

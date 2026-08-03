@@ -2,6 +2,7 @@ package com.discoverdev.nms.child;
 
 import com.discoverdev.nms.auth.MailService;
 import com.discoverdev.nms.auth.UserInvitationFactory;
+import com.discoverdev.nms.chat.RoomMembershipChangedEvent;
 import com.discoverdev.nms.child.dto.GuardianLinkResponse;
 import com.discoverdev.nms.child.dto.LinkOrInviteGuardianRequest;
 import com.discoverdev.nms.config.InviteProperties;
@@ -12,6 +13,7 @@ import com.discoverdev.nms.user.UserRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +28,7 @@ public class AdminGuardianService {
     private final UserInvitationFactory invitationFactory;
     private final MailService mailService;
     private final InviteProperties inviteProperties;
+    private final ApplicationEventPublisher events;
 
     public AdminGuardianService(
         GuardianLinkRepository linkRepository,
@@ -33,7 +36,8 @@ public class AdminGuardianService {
         UserRepository userRepository,
         UserInvitationFactory invitationFactory,
         MailService mailService,
-        InviteProperties inviteProperties
+        InviteProperties inviteProperties,
+        ApplicationEventPublisher events
     ) {
         this.linkRepository = linkRepository;
         this.childRepository = childRepository;
@@ -41,6 +45,17 @@ public class AdminGuardianService {
         this.invitationFactory = invitationFactory;
         this.mailService = mailService;
         this.inviteProperties = inviteProperties;
+        this.events = events;
+    }
+
+    /**
+     * Linking or unlinking a guardian changes who belongs in that child's room
+     * chat. This is what makes a second parent — a mother added after the father
+     * — appear in the room group without anyone touching the room.
+     */
+    private void announceGuardianChange(Child child) {
+        if (child.getRoom() == null) return;
+        events.publishEvent(RoomMembershipChangedEvent.of(child.getRoom().getId()));
     }
 
     private String buildParentInviteLink(String token) {
@@ -54,20 +69,23 @@ public class AdminGuardianService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Child not found"));
 
         Optional<User> existing = userRepository.findByEmailIgnoreCase(req.email());
-        if (existing.isPresent()) {
-            return linkExisting(existing.get(), child, req, nurseryId);
-        }
-        return inviteAndLink(child, req, actor);
+        GuardianLinkResponse response = existing.isPresent()
+            ? linkExisting(existing.get(), child, req, nurseryId)
+            : inviteAndLink(child, req, actor);
+        announceGuardianChange(child);
+        return response;
     }
 
     @Transactional
     public void unlink(UUID childId, UUID guardianId) {
         UUID nurseryId = TenantContext.currentNurseryId();
-        childRepository.findByIdAndNurseryId(childId, nurseryId)
+        Child child = childRepository.findByIdAndNurseryId(childId, nurseryId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Child not found"));
         GuardianLink link = linkRepository.findByChildIdAndGuardianId(childId, guardianId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Guardian link not found"));
         linkRepository.delete(link);
+        // They keep their place if another of their children is in this room.
+        announceGuardianChange(child);
     }
 
     @Transactional(readOnly = true)

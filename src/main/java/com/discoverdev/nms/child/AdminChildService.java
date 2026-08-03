@@ -1,6 +1,7 @@
 package com.discoverdev.nms.child;
 
 import com.discoverdev.nms.chat.ChatAccessService;
+import com.discoverdev.nms.chat.RoomMembershipChangedEvent;
 import com.discoverdev.nms.child.dto.ChildResponse;
 import com.discoverdev.nms.child.dto.CreateChildRequest;
 import com.discoverdev.nms.child.dto.ReassignRoomRequest;
@@ -13,6 +14,7 @@ import com.discoverdev.nms.tenant.TenantContext;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,19 +28,32 @@ public class AdminChildService {
     private final NurseryRepository nurseryRepository;
     private final GuardianLinkRepository guardianLinkRepository;
     private final ChatAccessService chatAccess;
+    private final ApplicationEventPublisher events;
 
     public AdminChildService(
         ChildRepository childRepository,
         RoomRepository roomRepository,
         NurseryRepository nurseryRepository,
         GuardianLinkRepository guardianLinkRepository,
-        ChatAccessService chatAccess
+        ChatAccessService chatAccess,
+        ApplicationEventPublisher events
     ) {
         this.childRepository = childRepository;
         this.roomRepository = roomRepository;
         this.nurseryRepository = nurseryRepository;
         this.guardianLinkRepository = guardianLinkRepository;
         this.chatAccess = chatAccess;
+        this.events = events;
+    }
+
+    /** Ask the chat layer to re-derive who belongs in these rooms' group chats. */
+    private void announceRoomChange(UUID... roomIds) {
+        RoomMembershipChangedEvent event = RoomMembershipChangedEvent.of(roomIds);
+        if (!event.isEmpty()) events.publishEvent(event);
+    }
+
+    private static UUID roomIdOf(Child child) {
+        return child.getRoom() != null ? child.getRoom().getId() : null;
     }
 
     @Transactional
@@ -60,7 +75,11 @@ public class AdminChildService {
             .immunizations(req.immunizations())
             .enrollmentStatus(EnrollmentStatus.ENROLLED)
             .build();
-        return ChildResponse.of(childRepository.save(child));
+        Child saved = childRepository.save(child);
+        // Guardians are linked afterwards, so this usually finds nothing to add —
+        // but a child created straight into a room still belongs in its chat.
+        announceRoomChange(roomIdOf(saved));
+        return ChildResponse.of(saved);
     }
 
     @Transactional(readOnly = true)
@@ -101,6 +120,7 @@ public class AdminChildService {
     public ChildResponse reassignRoom(UUID id, ReassignRoomRequest req) {
         UUID nurseryId = TenantContext.currentNurseryId();
         Child child = loadOwned(id);
+        UUID previousRoomId = roomIdOf(child);
         if (req.roomId() == null) {
             child.setRoom(null);
         } else {
@@ -112,7 +132,12 @@ public class AdminChildService {
             }
             child.setRoom(target);
         }
-        return ChildResponse.of(childRepository.save(child));
+        Child saved = childRepository.save(child);
+        // Both ends: the guardians may need to leave the old group and join the
+        // new one — or stay in the old one, if another of their children is
+        // still there. Recomputing both rooms settles that without asking.
+        announceRoomChange(previousRoomId, roomIdOf(saved));
+        return ChildResponse.of(saved);
     }
 
     @Transactional
@@ -128,6 +153,7 @@ public class AdminChildService {
         // Revoke chat for each linked guardian who now has no other enrolled children.
         guardianLinkRepository.findByChildIdOrderByCreatedAtAsc(saved.getId())
             .forEach(link -> chatAccess.revokeParentIfNoEnrolledChildren(link.getGuardian()));
+        announceRoomChange(roomIdOf(saved));
         return ChildResponse.of(saved);
     }
 
@@ -139,7 +165,9 @@ public class AdminChildService {
         }
         child.setEnrollmentStatus(EnrollmentStatus.ENROLLED);
         child.setUnenrolledAt(null);
-        return ChildResponse.of(childRepository.save(child));
+        Child saved = childRepository.save(child);
+        announceRoomChange(roomIdOf(saved));
+        return ChildResponse.of(saved);
     }
 
     Child loadOwned(UUID id) {

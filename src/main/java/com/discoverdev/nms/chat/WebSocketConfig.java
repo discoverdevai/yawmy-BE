@@ -35,6 +35,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private static final Logger log = LoggerFactory.getLogger(WebSocketConfig.class);
     private static final String USER_ATTR = "appUserDetails";
+    private static final String THREAD_TOPIC_PREFIX = "/topic/threads/";
+    private static final String USER_QUEUE_PREFIX = "/user/queue/";
 
     private final JwtService jwtService;
     private final AppUserDetailsService userDetailsService;
@@ -52,8 +54,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic");
+        // /topic — one destination per thread, for an open conversation.
+        // /queue — per-user destinations behind the /user prefix, so the chat list
+        //          can update without subscribing to every thread it lists.
+        registry.enableSimpleBroker("/topic", "/queue");
         registry.setApplicationDestinationPrefixes("/app");
+        registry.setUserDestinationPrefix("/user");
     }
 
     @Override
@@ -123,10 +129,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 Principal principal = accessor.getUser();
                 if (!(principal instanceof AppUserPrincipal app)) return null;
                 String dest = accessor.getDestination();
-                if (dest == null || !dest.startsWith("/topic/threads/")) {
+                if (dest == null) return null;
+
+                // A /user/** destination is resolved by Spring against the
+                // subscriber's own session, so it can only ever deliver to the
+                // person who asked. There is nothing further to authorize.
+                if (dest.startsWith(USER_QUEUE_PREFIX)) {
+                    return message;
+                }
+                if (!dest.startsWith(THREAD_TOPIC_PREFIX)) {
                     return null;
                 }
-                String threadIdStr = dest.substring("/topic/threads/".length());
+                String threadIdStr = dest.substring(THREAD_TOPIC_PREFIX.length());
                 try {
                     UUID threadId = UUID.fromString(threadIdStr);
                     boolean ok = participantRepository

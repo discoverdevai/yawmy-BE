@@ -10,10 +10,10 @@ import java.nio.file.StandardCopyOption;
 import org.springframework.core.io.PathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
-@Component
+// Registered by MediaStorageConfig rather than component-scanned: with @Component
+// this and S3MediaStorage would both satisfy the single MediaStorage injection.
 public class LocalDiskMediaStorage implements MediaStorage {
 
     private final Path root;

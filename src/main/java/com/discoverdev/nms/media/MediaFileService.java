@@ -20,17 +20,23 @@ public class MediaFileService {
     private final MediaStorage storage;
     private final GuardianLinkRepository guardianLinkRepository;
     private final TeacherRoomAssignmentRepository teacherRoomRepository;
+    private final ChatAttachmentAccess chatAttachmentAccess;
+    private final AnnouncementAttachmentAccess announcementAttachmentAccess;
 
     public MediaFileService(
         MediaItemRepository repository,
         MediaStorage storage,
         GuardianLinkRepository guardianLinkRepository,
-        TeacherRoomAssignmentRepository teacherRoomRepository
+        TeacherRoomAssignmentRepository teacherRoomRepository,
+        ChatAttachmentAccess chatAttachmentAccess,
+        AnnouncementAttachmentAccess announcementAttachmentAccess
     ) {
         this.repository = repository;
         this.storage = storage;
         this.guardianLinkRepository = guardianLinkRepository;
         this.teacherRoomRepository = teacherRoomRepository;
+        this.chatAttachmentAccess = chatAttachmentAccess;
+        this.announcementAttachmentAccess = announcementAttachmentAccess;
     }
 
     @Transactional(readOnly = true)
@@ -56,6 +62,20 @@ public class MediaFileService {
 
         Role role = requester.getRole();
         if (role == Role.ADMIN) return true;
+
+        // Chat and announcement attachments carry no child and no room, so the
+        // room-scoped rules below have nothing to match and would deny every
+        // teacher and parent. What the file hangs off decides instead: the thread
+        // it was sent in, or the announcement it was posted with.
+        if (item.getChild() == null && item.getRoom() == null) {
+            if (chatAttachmentAccess.isAttachedToThreadVisibleTo(item.getId(), requester.getId())) {
+                return true;
+            }
+            if (announcementAttachmentAccess
+                .isAttachedToAnnouncementVisibleTo(item.getId(), requester)) {
+                return true;
+            }
+        }
 
         if (role == Role.TEACHER) {
             UUID scopeRoomId = item.getChild() != null

@@ -72,6 +72,23 @@ app:
     email: shehabgamal623@gmail.com
     password: ChangeMe!123
     full-name: Root Admin
+  chat:
+    # Re-derive every room group's membership at boot. Idempotent, so it also
+    # repairs any drift; set false only if the room count ever makes it costly.
+    reconcile-on-startup: ${CHAT_RECONCILE_ON_STARTUP:true}
   media:
+    # Local disk is only the fallback, used when no bucket is configured, so the
+    # app still runs with no AWS account. Anything deployed should set
+    # AWS_S3_BUCKET_NAME — the container filesystem does not survive a redeploy.
     local:
       root: ${MEDIA_ROOT:./uploads}
+    s3:
+      bucket: ${AWS_S3_BUCKET_NAME:}
+      region: ${AWS_REGION:eu-central-1}
+      access-key: ${AWS_ACCESS_KEY_ID:}
+      secret-key: ${AWS_SECRET_ACCESS_KEY:}
+      # Blank for real AWS. Set it to use any S3-compatible provider instead —
+      # Supabase Storage, Cloudflare R2, Backblaze B2, MinIO. Path-style
+      # addressing follows from having an endpoint unless forced either way.
+      endpoint: ${AWS_S3_ENDPOINT:}
+      path-style: ${AWS_S3_PATH_STYLE:}

@@ -34,6 +34,19 @@ public class ParentChatController {
         return chatService.getThread(t.getId(), principal.getUser());
     }
 
+    /**
+     * The parent's conversation with the nursery's admins — one thread, whichever
+     * admin answers. There is no id to supply: a parent should not have to know
+     * how many admins the nursery has, or which of them is on shift.
+     */
+    @PostMapping("/threads/admin")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ThreadDetailResponse openWithNursery(@AuthenticationPrincipal AppUserDetails principal) {
+        ChatThread t = access.openAdminSupport(principal.getUser());
+        return chatService.getThread(t.getId(), principal.getUser());
+    }
+
+    /** Resolves to the same thread as {@link #openWithNursery}, for callers that still send an id. */
     @PostMapping("/threads/admin/{adminId}")
     @ResponseStatus(HttpStatus.CREATED)
     public ThreadDetailResponse openWithAdmin(

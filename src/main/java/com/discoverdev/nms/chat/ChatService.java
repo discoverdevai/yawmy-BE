@@ -13,12 +13,15 @@ import com.discoverdev.nms.media.MediaItemRepository;
 import com.discoverdev.nms.nursery.Nursery;
 import com.discoverdev.nms.user.Role;
 import com.discoverdev.nms.user.User;
+import com.discoverdev.nms.user.UserRepository;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
@@ -39,6 +42,9 @@ public class ChatService {
     private final ChatMessageReactionRepository reactionRepository;
     private final ChatThreadReadRepository readRepository;
     private final MediaItemRepository mediaRepository;
+    private final ChatMessageHiddenRepository hiddenRepository;
+    private final UserMuteRepository muteRepository;
+    private final UserRepository userRepository;
     private final ChatMessageBroadcaster broadcaster;
     private final ApplicationEventPublisher events;
 
@@ -49,6 +55,9 @@ public class ChatService {
         ChatMessageReactionRepository reactionRepository,
         ChatThreadReadRepository readRepository,
         MediaItemRepository mediaRepository,
+        ChatMessageHiddenRepository hiddenRepository,
+        UserMuteRepository muteRepository,
+        UserRepository userRepository,
         ChatMessageBroadcaster broadcaster,
         ApplicationEventPublisher events
     ) {
@@ -58,8 +67,68 @@ public class ChatService {
         this.reactionRepository = reactionRepository;
         this.readRepository = readRepository;
         this.mediaRepository = mediaRepository;
+        this.hiddenRepository = hiddenRepository;
+        this.muteRepository = muteRepository;
+        this.userRepository = userRepository;
         this.broadcaster = broadcaster;
         this.events = events;
+    }
+
+    // ---- delete for me -------------------------------------------------------
+
+    /**
+     * Hide a message from this reader only. Everyone else's copy is untouched,
+     * and it is reversible — which is the difference between this and
+     * {@link #delete}, where the sender or an admin removes it for everyone.
+     */
+    @Transactional
+    public void hideForMe(UUID messageId, User user) {
+        ChatMessage message = messageRepository.findById(messageId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found"));
+        requireActiveMembership(message.getThread().getId(), user);
+        if (hiddenRepository.existsByMessageIdAndUserId(messageId, user.getId())) return;
+        hiddenRepository.save(ChatMessageHidden.builder().message(message).user(user).build());
+    }
+
+    @Transactional
+    public void unhideForMe(UUID messageId, User user) {
+        hiddenRepository.findByMessageIdAndUserId(messageId, user.getId())
+            .ifPresent(hiddenRepository::delete);
+    }
+
+    // ---- mute a person -------------------------------------------------------
+
+    /**
+     * Stop being notified about this person. Their messages still appear in the
+     * thread — this silences the interruption, not the speaker.
+     */
+    @Transactional
+    public void muteUser(UUID mutedUserId, User muter) {
+        if (mutedUserId.equals(muter.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot mute yourself");
+        }
+        User muted = userRepository.findById(mutedUserId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        if (muter.getNursery() == null || muted.getNursery() == null
+            || !muted.getNursery().getId().equals(muter.getNursery().getId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        }
+        if (muteRepository.existsByMuterIdAndMutedId(muter.getId(), mutedUserId)) return;
+        muteRepository.save(UserMute.builder().muter(muter).muted(muted).build());
+    }
+
+    @Transactional
+    public void unmuteUser(UUID mutedUserId, User muter) {
+        muteRepository.findByMuterIdAndMutedId(muter.getId(), mutedUserId)
+            .ifPresent(muteRepository::delete);
+    }
+
+    /** Who this user has muted, so the app can show the toggle already on. */
+    @Transactional(readOnly = true)
+    public List<UUID> mutedUserIds(User user) {
+        return muteRepository.findByMuterIdOrderByCreatedAtDesc(user.getId()).stream()
+            .map(m -> m.getMuted().getId())
+            .toList();
     }
 
     @Transactional(readOnly = true)
@@ -75,8 +144,9 @@ public class ChatService {
             ChatThreadRead r = readRepository.findByThreadIdAndUserId(t.getId(), user.getId()).orElse(null);
             Instant lastReadAt = r != null ? r.getLastReadAt() : Instant.EPOCH;
             long unread = messageRepository
-                .countByThreadIdAndCreatedAtGreaterThanAndDeletedAtIsNull(t.getId(), lastReadAt);
-            String preview = last != null ? truncate(last.getBody(), 100) : null;
+                .countByThreadIdAndCreatedAtGreaterThanAndSenderIdNotAndDeletedAtIsNull(
+                    t.getId(), lastReadAt, user.getId());
+            String preview = MessageResponse.previewOf(last, 100);
             List<ThreadSummaryResponse.ParticipantRef> parts = participantRepository
                 .findByThreadIdAndLeftAtIsNull(t.getId()).stream()
                 .map(p -> new ThreadSummaryResponse.ParticipantRef(
@@ -107,27 +177,56 @@ public class ChatService {
             r != null ? r.getLastReadMessageId() : null);
     }
 
+    /**
+     * A page of the conversation as this reader sees it.
+     *
+     * `before` pages backwards through history (newest first) as the user scrolls
+     * up. `after` asks for what has arrived since a known point, oldest first —
+     * that is the socket-is-down fallback, and it must not be answered with the
+     * newest page or the client has to guess what it already has.
+     *
+     * Messages this reader hid are dropped here, so "delete for me" holds for
+     * every later fetch without touching anyone else's view.
+     */
     @Transactional(readOnly = true)
-    public List<MessageResponse> history(UUID threadId, Instant before, Integer limit, User user) {
+    public List<MessageResponse> history(
+        UUID threadId, Instant before, Instant after, Integer limit, User user
+    ) {
         requireActiveMembership(threadId, user);
         int cap = (limit == null || limit <= 0) ? DEFAULT_PAGE : Math.min(limit, MAX_PAGE);
-        List<ChatMessage> messages = before == null
-            ? messageRepository.findByThreadIdAndDeletedAtIsNullOrderByCreatedAtDesc(threadId, Limit.of(cap))
-            : messageRepository.findByThreadIdAndCreatedAtLessThanAndDeletedAtIsNullOrderByCreatedAtDesc(
-                threadId, before, Limit.of(cap));
+        List<ChatMessage> messages;
+        if (after != null) {
+            messages = messageRepository
+                .findByThreadIdAndCreatedAtGreaterThanAndDeletedAtIsNullOrderByCreatedAtAsc(
+                    threadId, after, Limit.of(cap));
+        } else if (before != null) {
+            messages = messageRepository
+                .findByThreadIdAndCreatedAtLessThanAndDeletedAtIsNullOrderByCreatedAtDesc(
+                    threadId, before, Limit.of(cap));
+        } else {
+            messages = messageRepository
+                .findByThreadIdAndDeletedAtIsNullOrderByCreatedAtDesc(threadId, Limit.of(cap));
+        }
         if (messages.isEmpty()) return List.of();
+
         List<UUID> ids = messages.stream().map(ChatMessage::getId).toList();
+        Set<UUID> hidden = new HashSet<>(hiddenRepository.findHiddenMessageIds(user.getId(), ids));
         Map<UUID, List<ChatMessageReaction>> reactionsByMessage = new HashMap<>();
         for (ChatMessageReaction r : reactionRepository.findByMessageIdIn(ids)) {
             reactionsByMessage.computeIfAbsent(r.getMessage().getId(), k -> new ArrayList<>()).add(r);
         }
         return messages.stream()
+            .filter(m -> !hidden.contains(m.getId()))
             .map(m -> MessageResponse.of(m, reactionsByMessage.getOrDefault(m.getId(), List.of())))
             .toList();
     }
 
     @Transactional
     public MessageResponse send(UUID threadId, SendMessageRequest req, User sender) {
+        if (!req.hasContent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "A message needs text or at least one attachment");
+        }
         ChatThread t = requireActiveMembership(threadId, sender);
         Nursery nursery = t.getNursery();
         ChatMessage replyTo = null;
@@ -160,15 +259,21 @@ public class ChatService {
         t.setLastMessageAt(saved.getCreatedAt());
         threadRepository.save(t);
 
-        List<UUID> recipients = participantRepository.findByThreadIdAndLeftAtIsNull(threadId).stream()
+        List<ChatParticipant> others = participantRepository
+            .findByThreadIdAndLeftAtIsNull(threadId).stream()
             .filter(p -> !p.getUser().getId().equals(sender.getId()))
-            .map(p -> p.getUser().getId())
             .toList();
+        List<UUID> recipients = others.stream().map(p -> p.getUser().getId()).toList();
         events.publishEvent(new ChatMessageSentEvent(
             nursery.getId(), t.getId(), saved.getId(), sender.getId(), t.getType(), recipients
         ));
+
         MessageResponse resp = MessageResponse.of(saved, List.of());
+        // Two deliveries, two purposes: the thread topic updates an open
+        // conversation, the personal queues update everyone else's chat list.
         broadcaster.broadcast(threadId, resp);
+        broadcaster.notifyInboxes(
+            others.stream().map(p -> p.getUser().getEmail()).toList(), resp);
         return resp;
     }
 
@@ -277,10 +382,6 @@ public class ChatService {
         return local.isBefore(start) && !local.isBefore(end);
     }
 
-    private static String truncate(String s, int max) {
-        if (s == null) return null;
-        return s.length() <= max ? s : s.substring(0, max) + "…";
-    }
 
     @Transactional(readOnly = true)
     public ChatMessage requireMessageInThread(UUID messageId, UUID threadId) {

@@ -75,4 +75,13 @@ public class ChatThread {
         String s2 = b.toString();
         return s1.compareTo(s2) < 0 ? s1 + "|" + s2 : s2 + "|" + s1;
     }
+
+    /**
+     * Key for a member's ADMIN_SUPPORT thread. It rides on the same unique
+     * (nursery_id, direct_key) index as DMs; the "support:" prefix cannot collide
+     * with a direct key, which is always two UUIDs joined by a pipe.
+     */
+    public static String buildSupportKey(UUID memberId) {
+        return "support:" + memberId;
+    }
 }

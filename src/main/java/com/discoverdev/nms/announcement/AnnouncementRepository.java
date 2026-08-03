@@ -30,4 +30,18 @@ public interface AnnouncementRepository extends JpaRepository<Announcement, UUID
     List<Announcement> findVisibleToRooms(
         @Param("nurseryId") UUID nurseryId,
         @Param("roomIds") Collection<UUID> roomIds);
+
+    /**
+     * The announcements carrying this attachment. Normally one, but the same
+     * media can be reused across posts, and being able to read any one of them
+     * is enough to be allowed the file.
+     */
+    @Query("""
+        select a from Announcement a
+        join a.attachments m
+        where m.id = :mediaId and a.nursery.id = :nurseryId
+        """)
+    List<Announcement> findByAttachmentId(
+        @Param("mediaId") UUID mediaId,
+        @Param("nurseryId") UUID nurseryId);
 }

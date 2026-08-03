@@ -78,6 +78,15 @@ public class MediaItem {
     @Column(length = 500)
     private String caption;
 
+    // The name the file had on the uploader's device. Document bubbles show it
+    // verbatim ("Trip consent form.pdf"); storageKey is a UUID and cannot.
+    @Column(name = "original_filename", length = 255)
+    private String originalFilename;
+
+    // Playback length for AUDIO (and, when the client reports it, VIDEO).
+    @Column(name = "duration_ms")
+    private Long durationMs;
+
     @CreationTimestamp
     @Column(name = "uploaded_at", nullable = false, updatable = false)
     private Instant uploadedAt;

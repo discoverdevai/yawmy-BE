@@ -2,6 +2,7 @@ package com.discoverdev.nms.admin;
 
 import com.discoverdev.nms.admin.dto.TeacherAssignmentResponse;
 import com.discoverdev.nms.admin.dto.TeacherResponse;
+import com.discoverdev.nms.chat.RoomMembershipChangedEvent;
 import com.discoverdev.nms.nursery.Room;
 import com.discoverdev.nms.nursery.RoomRepository;
 import com.discoverdev.nms.nursery.TeacherRoomAssignment;
@@ -12,6 +13,7 @@ import com.discoverdev.nms.user.User;
 import com.discoverdev.nms.user.UserRepository;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,15 +25,18 @@ public class AdminTeacherAssignmentService {
     private final TeacherRoomAssignmentRepository assignmentRepository;
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher events;
 
     public AdminTeacherAssignmentService(
         TeacherRoomAssignmentRepository assignmentRepository,
         RoomRepository roomRepository,
-        UserRepository userRepository
+        UserRepository userRepository,
+        ApplicationEventPublisher events
     ) {
         this.assignmentRepository = assignmentRepository;
         this.roomRepository = roomRepository;
         this.userRepository = userRepository;
+        this.events = events;
     }
 
     @Transactional
@@ -48,6 +53,9 @@ public class AdminTeacherAssignmentService {
         TeacherRoomAssignment saved = assignmentRepository.save(
             TeacherRoomAssignment.builder().teacher(teacher).room(room).build()
         );
+        // Joins the room's group chat; the room's parents become reachable in the
+        // teacher's directory on their next fetch.
+        events.publishEvent(RoomMembershipChangedEvent.of(roomId));
         return TeacherAssignmentResponse.of(saved);
     }
 
@@ -60,6 +68,8 @@ public class AdminTeacherAssignmentService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found");
         }
         assignmentRepository.deleteByTeacherIdAndRoomId(teacherId, roomId);
+        // Leaves the group chat, and the room's parents drop out of their directory.
+        events.publishEvent(RoomMembershipChangedEvent.of(roomId));
     }
 
     @Transactional(readOnly = true)

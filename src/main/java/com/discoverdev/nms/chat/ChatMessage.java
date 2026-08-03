@@ -52,7 +52,8 @@ public class ChatMessage {
     @JoinColumn(name = "sender_id", nullable = false)
     private User sender;
 
-    @Column(nullable = false, length = 4000)
+    // Null when the message is only a voice note or an attachment.
+    @Column(length = 4000)
     private String body;
 
     @ManyToOne(fetch = FetchType.LAZY)
