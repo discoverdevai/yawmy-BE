@@ -54,7 +54,10 @@ public class UserImageService {
             }
             storage.store(key, file.getInputStream(), file.getSize(), contentType);
         } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store file", e);
+            // Reason, not just cause — Spring's error body is built from the
+            // reason, so a bare string hides which storage problem this was.
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Failed to store file: " + e.getMessage(), e);
         }
         user.setImageKey(key);
         String url = "/api/files/users/" + user.getId() + "/image";

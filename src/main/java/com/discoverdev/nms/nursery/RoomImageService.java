@@ -61,7 +61,13 @@ public class RoomImageService {
             }
             storage.store(key, file.getInputStream(), file.getSize(), contentType);
         } catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to store file", e);
+            // The cause is attached but never reaches the client — Spring builds
+            // the response body from the reason alone. Without the message
+            // inlined, every storage misconfiguration reads as a bare "Failed to
+            // store file" and the admin has no way to tell a wrong bucket from
+            // expired keys from the provider being down.
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "Failed to store file: " + e.getMessage(), e);
         }
         room.setImageKey(key);
         room.setImageUrl("/api/files/rooms/" + room.getId() + "/image");

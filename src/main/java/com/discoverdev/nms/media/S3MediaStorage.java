@@ -8,6 +8,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
@@ -54,8 +55,15 @@ public class S3MediaStorage implements MediaStorage {
                 // instead of buffering the whole file to compute it.
                 RequestBody.fromInputStream(content, contentLength)
             );
-        } catch (S3Exception e) {
-            throw new IOException("S3 upload failed for " + key + ": " + e.getMessage(), e);
+        } catch (SdkException e) {
+            // SdkException, not S3Exception. S3Exception only covers errors the
+            // bucket actually answered with (AccessDenied, NoSuchBucket). A
+            // misconfigured endpoint, an unresolvable region or credentials the
+            // SDK cannot load never reach S3 at all — they throw
+            // SdkClientException, which is a sibling, not a subclass. Catching
+            // the narrow type let those escape as a bare runtime failure with no
+            // hint that storage was the thing that broke.
+            throw new IOException("S3 upload failed for " + key + ": " + describe(e), e);
         }
     }
 
@@ -72,8 +80,8 @@ public class S3MediaStorage implements MediaStorage {
             return new S3ObjectResource(stream, key, length);
         } catch (NoSuchKeyException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found");
-        } catch (S3Exception e) {
-            throw new IOException("S3 read failed for " + key + ": " + e.getMessage(), e);
+        } catch (SdkException e) {
+            throw new IOException("S3 read failed for " + key + ": " + describe(e), e);
         }
     }
 
@@ -82,8 +90,8 @@ public class S3MediaStorage implements MediaStorage {
         requireKey(key);
         try {
             client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
-        } catch (S3Exception e) {
-            throw new IOException("S3 delete failed for " + key + ": " + e.getMessage(), e);
+        } catch (SdkException e) {
+            throw new IOException("S3 delete failed for " + key + ": " + describe(e), e);
         }
     }
 
@@ -95,9 +103,23 @@ public class S3MediaStorage implements MediaStorage {
             return true;
         } catch (NoSuchKeyException e) {
             return false;
-        } catch (S3Exception e) {
+        } catch (SdkException e) {
             return false;
         }
+    }
+
+    /**
+     * The SDK's message, plus the bucket and — for an error S3 actually answered
+     * with — its status code. Which of "wrong bucket", "wrong keys", "wrong
+     * endpoint" it is, is exactly what a bare "S3 upload failed" hides, and
+     * these are all deployment config, not secrets.
+     */
+    private String describe(SdkException e) {
+        StringBuilder sb = new StringBuilder("bucket '").append(bucket).append("'");
+        if (e instanceof S3Exception s3) {
+            sb.append(", HTTP ").append(s3.statusCode());
+        }
+        return sb.append(" — ").append(e.getMessage()).toString();
     }
 
     private void requireKey(String key) throws IOException {
