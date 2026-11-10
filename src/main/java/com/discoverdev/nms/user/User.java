@@ -88,6 +88,18 @@ public class User {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    /** Incremented whenever credentials change so previously issued access JWTs are rejected. */
+    @Column(name = "access_token_version")
+    private Integer accessTokenVersion;
+
+    public int getAccessTokenVersion() {
+        return accessTokenVersion == null ? 0 : accessTokenVersion;
+    }
+
+    public void invalidateAccessTokens() {
+        accessTokenVersion = getAccessTokenVersion() + 1;
+    }
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

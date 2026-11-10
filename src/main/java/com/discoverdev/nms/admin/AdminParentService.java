@@ -7,18 +7,21 @@ import com.discoverdev.nms.admin.dto.ParentResponse;
 import com.discoverdev.nms.admin.dto.UpdateParentRequest;
 import com.discoverdev.nms.auth.Invite;
 import com.discoverdev.nms.auth.InviteRepository;
+import com.discoverdev.nms.auth.RefreshTokenRepository;
 import com.discoverdev.nms.child.Child;
 import com.discoverdev.nms.child.ChildRepository;
 import com.discoverdev.nms.child.EnrollmentStatus;
 import com.discoverdev.nms.child.GuardianLink;
 import com.discoverdev.nms.child.GuardianLinkRepository;
 import com.discoverdev.nms.tenant.TenantContext;
+import com.discoverdev.nms.user.AccessTokensInvalidatedEvent;
 import com.discoverdev.nms.user.Role;
 import com.discoverdev.nms.user.User;
 import com.discoverdev.nms.user.UserRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,17 +34,23 @@ public class AdminParentService {
     private final GuardianLinkRepository guardianLinkRepository;
     private final InviteRepository inviteRepository;
     private final ChildRepository childRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final ApplicationEventPublisher events;
 
     public AdminParentService(
         UserRepository userRepository,
         GuardianLinkRepository guardianLinkRepository,
         InviteRepository inviteRepository,
-        ChildRepository childRepository
+        ChildRepository childRepository,
+        RefreshTokenRepository refreshTokenRepository,
+        ApplicationEventPublisher events
     ) {
         this.userRepository = userRepository;
         this.guardianLinkRepository = guardianLinkRepository;
         this.inviteRepository = inviteRepository;
         this.childRepository = childRepository;
+        this.refreshTokenRepository = refreshTokenRepository;
+        this.events = events;
     }
 
     /** All (non-deleted) parents in the nursery with their relationship + status. */
@@ -162,8 +171,11 @@ public class AdminParentService {
         }
         guardianLinkRepository.deleteAll(links); // remove this parent's links either way
         p.setEnabled(false);
+        p.invalidateAccessTokens();
         p.setDeletedAt(Instant.now());
         userRepository.save(p);
+        refreshTokenRepository.revokeAllForUser(p, Instant.now());
+        events.publishEvent(new AccessTokensInvalidatedEvent(p.getId()));
     }
 
     private String relationshipOf(UUID parentId) {

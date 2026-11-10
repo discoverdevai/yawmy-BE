@@ -27,6 +27,7 @@ import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 
 @Configuration
@@ -34,22 +35,25 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private static final Logger log = LoggerFactory.getLogger(WebSocketConfig.class);
-    private static final String USER_ATTR = "appUserDetails";
+    static final String USER_ATTR = "appUserDetails";
     private static final String THREAD_TOPIC_PREFIX = "/topic/threads/";
     private static final String USER_QUEUE_PREFIX = "/user/queue/";
 
     private final JwtService jwtService;
     private final AppUserDetailsService userDetailsService;
     private final ChatParticipantRepository participantRepository;
+    private final WebSocketSessionRegistry sessionRegistry;
 
     public WebSocketConfig(
         JwtService jwtService,
         AppUserDetailsService userDetailsService,
-        ChatParticipantRepository participantRepository
+        ChatParticipantRepository participantRepository,
+        WebSocketSessionRegistry sessionRegistry
     ) {
         this.jwtService = jwtService;
         this.userDetailsService = userDetailsService;
         this.participantRepository = participantRepository;
+        this.sessionRegistry = sessionRegistry;
     }
 
     @Override
@@ -74,6 +78,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registration.interceptors(new SubscriptionAccessInterceptor());
     }
 
+    @Override
+    public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
+        registration.addDecoratorFactory(sessionRegistry);
+    }
+
     private class JwtHandshakeInterceptor implements HandshakeInterceptor {
         @Override
         public boolean beforeHandshake(
@@ -91,8 +100,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 JwtService.ParsedToken parsed = jwtService.parse(token);
                 AppUserDetails details = (AppUserDetails)
                     userDetailsService.loadUserByUsername(parsed.email());
-                if (!details.isEnabled()) {
-                    log.debug("WS handshake rejected — user disabled");
+                if (!jwtService.isCurrentFor(parsed, details.getUser())) {
+                    log.debug("WS handshake rejected — user disabled or token superseded");
                     return false;
                 }
                 attributes.put(USER_ATTR, details);

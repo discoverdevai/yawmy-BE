@@ -5,6 +5,7 @@ import com.discoverdev.nms.auth.dto.InviteValidationResponse;
 import com.discoverdev.nms.auth.dto.TokenResponse;
 import com.discoverdev.nms.config.JwtProperties;
 import com.discoverdev.nms.config.PasswordResetProperties;
+import com.discoverdev.nms.user.AccessTokensInvalidatedEvent;
 import com.discoverdev.nms.user.Role;
 import com.discoverdev.nms.user.User;
 import com.discoverdev.nms.user.UserRepository;
@@ -13,6 +14,7 @@ import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -34,6 +36,7 @@ public class AuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final ApplicationEventPublisher events;
     private final MailService mailService;
     private final Duration refreshTokenTtl;
     private final Duration passwordResetTtl;
@@ -47,6 +50,7 @@ public class AuthService {
         PasswordResetTokenRepository passwordResetTokenRepository,
         PasswordEncoder passwordEncoder,
         JwtService jwtService,
+        ApplicationEventPublisher events,
         MailService mailService,
         JwtProperties jwtProps,
         PasswordResetProperties resetProps
@@ -58,6 +62,7 @@ public class AuthService {
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.events = events;
         this.mailService = mailService;
         this.refreshTokenTtl = Duration.ofDays(jwtProps.refreshTokenTtlDays());
         this.passwordResetTtl = Duration.ofMinutes(resetProps.ttlMinutes());
@@ -135,10 +140,15 @@ public class AuthService {
             throw new AuthException("Refresh token expired or revoked");
         }
 
+        User user = token.getUser();
+        if (!user.isEnabled() || user.getDeletedAt() != null) {
+            throw new AuthException("Account is disabled");
+        }
+
         token.setRevokedAt(Instant.now());
         refreshTokenRepository.save(token);
 
-        return issueTokens(token.getUser());
+        return issueTokens(user);
     }
 
     /**
@@ -185,6 +195,7 @@ public class AuthService {
 
         User user = invite.getUser();
         user.setPasswordHash(passwordEncoder.encode(newPassword));
+        invalidateAccessTokens(user);
         user.setEnabled(true);
         userRepository.save(user);
 
@@ -297,6 +308,7 @@ public class AuthService {
 
         User user = token.getUser();
         user.setPasswordHash(passwordEncoder.encode(newPassword));
+        invalidateAccessTokens(user);
         userRepository.save(user);
 
         token.setUsedAt(Instant.now());
@@ -316,8 +328,8 @@ public class AuthService {
 
     /**
      * Change the password of an already-authenticated user. Requires the current
-     * password (no emailed token). Revokes refresh tokens so other sessions must
-     * sign in again with the new password.
+     * password (no emailed token). Revokes refresh tokens and supersedes all
+     * access tokens so sessions must authenticate again with the new password.
      */
     @Transactional
     public void changePassword(User user, String currentPassword, String newPassword) {
@@ -330,6 +342,7 @@ public class AuthService {
         }
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
+        invalidateAccessTokens(user);
         userRepository.save(user);
 
         refreshTokenRepository.revokeAllForUser(user, Instant.now());
@@ -346,5 +359,10 @@ public class AuthService {
             .build();
         refreshTokenRepository.save(refresh);
         return TokenResponse.bearer(accessToken, rawRefresh, jwtService.getAccessTokenTtl().toSeconds());
+    }
+
+    private void invalidateAccessTokens(User user) {
+        user.invalidateAccessTokens();
+        events.publishEvent(new AccessTokensInvalidatedEvent(user.getId()));
     }
 }
