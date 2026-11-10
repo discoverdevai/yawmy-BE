@@ -6,10 +6,12 @@ import com.discoverdev.nms.admin.dto.UpdateStaffRequest;
 import com.discoverdev.nms.auth.Invite;
 import com.discoverdev.nms.auth.InviteRepository;
 import com.discoverdev.nms.auth.MailService;
+import com.discoverdev.nms.auth.RefreshTokenRepository;
 import com.discoverdev.nms.auth.UserInvitationFactory;
 import com.discoverdev.nms.config.InviteProperties;
 import com.discoverdev.nms.nursery.TeacherRoomAssignmentRepository;
 import com.discoverdev.nms.tenant.TenantContext;
+import com.discoverdev.nms.user.AccessTokensInvalidatedEvent;
 import com.discoverdev.nms.user.Role;
 import com.discoverdev.nms.user.StaffRole;
 import com.discoverdev.nms.user.User;
@@ -18,6 +20,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +35,8 @@ public class AdminStaffService {
     private final UserInvitationFactory invitationFactory;
     private final MailService mailService;
     private final InviteProperties inviteProperties;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final ApplicationEventPublisher events;
 
     public AdminStaffService(
         UserRepository userRepository,
@@ -39,7 +44,9 @@ public class AdminStaffService {
         TeacherRoomAssignmentRepository assignmentRepository,
         UserInvitationFactory invitationFactory,
         MailService mailService,
-        InviteProperties inviteProperties
+        InviteProperties inviteProperties,
+        RefreshTokenRepository refreshTokenRepository,
+        ApplicationEventPublisher events
     ) {
         this.userRepository = userRepository;
         this.inviteRepository = inviteRepository;
@@ -47,6 +54,8 @@ public class AdminStaffService {
         this.invitationFactory = invitationFactory;
         this.mailService = mailService;
         this.inviteProperties = inviteProperties;
+        this.refreshTokenRepository = refreshTokenRepository;
+        this.events = events;
     }
 
     /**
@@ -121,8 +130,11 @@ public class AdminStaffService {
         User t = loadTeacher(id);
         assignmentRepository.deleteByTeacherId(t.getId()); // out of every room
         t.setEnabled(false);
+        t.invalidateAccessTokens();
         t.setDeletedAt(Instant.now());
         userRepository.save(t);
+        refreshTokenRepository.revokeAllForUser(t, Instant.now());
+        events.publishEvent(new AccessTokensInvalidatedEvent(t.getId()));
     }
 
     /** The staff-role options for the "add member" dropdown. */

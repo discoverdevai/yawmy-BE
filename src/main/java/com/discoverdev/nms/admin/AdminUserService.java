@@ -2,11 +2,13 @@ package com.discoverdev.nms.admin;
 
 import com.discoverdev.nms.admin.dto.AdminUserResponse;
 import com.discoverdev.nms.auth.RefreshTokenRepository;
+import com.discoverdev.nms.user.AccessTokensInvalidatedEvent;
 import com.discoverdev.nms.user.User;
 import com.discoverdev.nms.user.UserRepository;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -16,13 +18,16 @@ public class AdminUserService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final ApplicationEventPublisher events;
 
     public AdminUserService(
         UserRepository userRepository,
-        RefreshTokenRepository refreshTokenRepository
+        RefreshTokenRepository refreshTokenRepository,
+        ApplicationEventPublisher events
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.events = events;
     }
 
     @Transactional
@@ -33,8 +38,10 @@ public class AdminUserService {
         User user = loadUser(targetUserId);
         if (user.isEnabled()) {
             user.setEnabled(false);
+            user.invalidateAccessTokens();
             userRepository.save(user);
             refreshTokenRepository.revokeAllForUser(user, Instant.now());
+            events.publishEvent(new AccessTokensInvalidatedEvent(user.getId()));
         }
         return AdminUserResponse.of(user);
     }
