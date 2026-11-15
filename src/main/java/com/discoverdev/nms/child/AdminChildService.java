@@ -163,6 +163,12 @@ public class AdminChildService {
         if (child.getEnrollmentStatus() == EnrollmentStatus.ENROLLED) {
             return ChildResponse.of(child);
         }
+        Room room = child.getRoom();
+        if (room != null && (room.getArchivedAt() != null
+                || childRepository.countByRoomIdAndEnrollmentStatus(room.getId(), EnrollmentStatus.ENROLLED)
+                    >= room.getCapacity())) {
+            child.setRoom(null);
+        }
         child.setEnrollmentStatus(EnrollmentStatus.ENROLLED);
         child.setUnenrolledAt(null);
         Child saved = childRepository.save(child);
