@@ -68,7 +68,8 @@ public class AdminGuardianService {
         Child child = childRepository.findByIdAndNurseryId(childId, nurseryId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Child not found"));
 
-        Optional<User> existing = userRepository.findByEmailIgnoreCase(req.email());
+        Optional<User> existing = userRepository.findByEmailIgnoreCase(req.email())
+            .filter(u -> u.getDeletedAt() == null);
         GuardianLinkResponse response = existing.isPresent()
             ? linkExisting(existing.get(), child, req, nurseryId)
             : inviteAndLink(child, req, actor);

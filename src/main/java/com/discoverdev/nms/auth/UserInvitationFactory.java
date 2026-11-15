@@ -8,6 +8,7 @@ import com.discoverdev.nms.user.User;
 import com.discoverdev.nms.user.UserRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -39,19 +40,33 @@ public class UserInvitationFactory {
         Nursery nursery,
         User invitedBy
     ) {
-        if (userRepository.existsByEmailIgnoreCase(email)) {
+        User existing = userRepository.findByEmailIgnoreCase(email).orElse(null);
+        User user;
+        if (existing == null) {
+            user = User.builder()
+                .nursery(nursery)
+                .email(email)
+                .fullName(fullName)
+                .role(role)
+                .locale(locale != null ? locale : Locale.EN)
+                .phone(phone)
+                .enabled(false)
+                .build();
+        } else if (canRevive(existing, role, nursery)) {
+            user = existing;
+            user.setFullName(fullName);
+            user.setLocale(locale != null ? locale : Locale.EN);
+            user.setPhone(phone);
+            user.setPasswordHash(null);
+            user.setImageKey(null);
+            user.setImageUrl(null);
+            user.setStaffRole(null);
+            user.setEnabled(false);
+            user.setDeletedAt(null);
+            inviteRepository.closePendingForUser(user.getId(), Instant.now());
+        } else {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
-
-        User user = User.builder()
-            .nursery(nursery)
-            .email(email)
-            .fullName(fullName)
-            .role(role)
-            .locale(locale != null ? locale : Locale.EN)
-            .phone(phone)
-            .enabled(false)
-            .build();
         userRepository.save(user);
 
         String rawToken = Tokens.generateRawToken();
@@ -72,6 +87,14 @@ public class UserInvitationFactory {
             rawToken,
             expiresAt
         );
+    }
+
+    private static boolean canRevive(User existing, Role role, Nursery nursery) {
+        UUID existingNurseryId = existing.getNursery() != null ? existing.getNursery().getId() : null;
+        UUID nurseryId = nursery != null ? nursery.getId() : null;
+        return existing.getDeletedAt() != null
+            && existing.getRole() == role
+            && Objects.equals(existingNurseryId, nurseryId);
     }
 
     /**
