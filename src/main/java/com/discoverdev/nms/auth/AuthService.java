@@ -184,6 +184,9 @@ public class AuthService {
         }
 
         User user = invite.getUser();
+        if (user.getDeletedAt() != null) {
+            throw new AuthException("Invalid invite");
+        }
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setEnabled(true);
         userRepository.save(user);
@@ -198,7 +201,7 @@ public class AuthService {
     public InviteValidationResponse validateInvite(String rawInviteToken) {
         String tokenHash = Tokens.hash(rawInviteToken);
         Invite invite = inviteRepository.findByTokenHash(tokenHash).orElse(null);
-        if (invite == null) {
+        if (invite == null || invite.getUser().getDeletedAt() != null) {
             return InviteValidationResponse.invalid();
         }
 
