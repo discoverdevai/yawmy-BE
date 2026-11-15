@@ -1,5 +1,6 @@
 package com.discoverdev.nms.media;
 
+import com.discoverdev.nms.child.EnrollmentStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -9,6 +10,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface MediaItemRepository extends JpaRepository<MediaItem, UUID> {
 
     Optional<MediaItem> findByIdAndDeletedAtIsNull(UUID id);
+
+    List<MediaItem> findByChild_EnrollmentStatusAndChild_UnenrolledAtBeforeAndDeletedAtIsNull(
+        EnrollmentStatus status, Instant cutoff);
 
     Optional<MediaItem> findByIdAndNurseryIdAndDeletedAtIsNull(UUID id, UUID nurseryId);
 
