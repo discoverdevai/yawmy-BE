@@ -131,6 +131,10 @@ public class AdminRoomService {
     public RoomResponse archive(UUID id) {
         Room room = loadOwned(id);
         if (room.getArchivedAt() == null) {
+            if (childRepository.countByRoomIdAndEnrollmentStatus(room.getId(), EnrollmentStatus.ENROLLED) > 0) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Reassign this room's children before archiving it");
+            }
             room.setArchivedAt(Instant.now());
             roomRepository.save(room);
         }
