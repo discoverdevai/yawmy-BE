@@ -61,6 +61,10 @@ public class PasswordResetToken {
     @Column(name = "used_at")
     private Instant usedAt;
 
+    // Wrong OTP guesses for the current code; reset when a new code is sent.
+    @Column(name = "failed_attempts")
+    private Integer failedAttempts;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -76,5 +80,9 @@ public class PasswordResetToken {
 
     public boolean isVerified() {
         return verifiedAt != null;
+    }
+
+    public int failedAttemptCount() {
+        return failedAttempts == null ? 0 : failedAttempts;
     }
 }

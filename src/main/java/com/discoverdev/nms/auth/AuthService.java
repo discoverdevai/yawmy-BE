@@ -28,6 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+    private static final int MAX_OTP_ATTEMPTS = 5;
 
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
@@ -263,15 +264,25 @@ public class AuthService {
         return new ForgotPasswordResponse(rawToken, otpTtl.toSeconds());
     }
 
-    /** Verify the OTP the user typed against the emailed code. */
-    @Transactional
+    /**
+     * Verify the OTP the user typed against the emailed code. After
+     * MAX_OTP_ATTEMPTS wrong guesses the code is dead until a new one is sent.
+     * noRollbackFor keeps the failed-attempt count when a wrong guess throws.
+     */
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public void verifyResetOtp(String rawToken, String otp) {
         PasswordResetToken token = loadResetToken(rawToken);
         if (token.isExpired()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "The code has expired. Please resend a new code.");
         }
+        if (token.failedAttemptCount() >= MAX_OTP_ATTEMPTS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "The code has expired after too many incorrect attempts. Please resend a new code.");
+        }
         if (token.getOtpHash() == null || !token.getOtpHash().equals(Tokens.hash(otp))) {
+            token.setFailedAttempts(token.failedAttemptCount() + 1);
+            passwordResetTokenRepository.save(token);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "Incorrect verification code");
         }
@@ -287,6 +298,7 @@ public class AuthService {
         token.setOtpHash(Tokens.hash(otp));
         token.setExpiresAt(Instant.now().plus(otpTtl));
         token.setVerifiedAt(null); // a new code must be re-verified
+        token.setFailedAttempts(0);
         passwordResetTokenRepository.save(token);
 
         mailService.sendPasswordResetOtp(token.getUser().getEmail(), otp);
