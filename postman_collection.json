@@ -1138,7 +1138,37 @@
                     "{{roomId}}"
                   ]
                 },
-                "description": "Soft-archive the room (sets `archivedAt = now`). The row is preserved so historical references (children, daily logs, attendance) remain intact. Use **Restore Room** to bring it back."
+                "description": "Soft-archive the room (sets `archivedAt = now`). The row is preserved so historical references (children, daily logs, attendance) remain intact. Use **Restore Room** to bring it back.\n\n**409** if the room still has enrolled children: `Reassign this room's children before archiving it`. Use **Archive Room with Reassignment** for a room that has children."
+              }
+            },
+            {
+              "name": "Archive Room with Reassignment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/rooms/{{roomId}}/archive",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "rooms",
+                    "{{roomId}}",
+                    "archive"
+                  ]
+                },
+                "description": "Archive a room that still has children: every enrolled child in the room must be listed with the room to move them to. Reassigning and archiving happen in one transaction.\n\n**Body** - `reassignments` (required): `[{ childId, roomId }]`, one entry per enrolled child.\n\n**Responses**\n- `200` - room archived, children moved\n- `400` - a child is missing, listed twice, not in this room, or moved into this same room\n- `409` - room already archived, or a target room is archived or full",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reassignments\": [\n    { \"childId\": \"{{childId}}\", \"roomId\": \"<target-room-id>\" }\n  ]\n}"
+                }
               }
             },
             {
@@ -1474,7 +1504,7 @@
                     "unenroll"
                   ]
                 },
-                "description": "Set `enrollmentStatus = UNENROLLED` and record `unenrolledAt`. Hides the child from parent self-service immediately (PRD §6.3). Guardian links remain in DB for historical reference but no longer expose data."
+                "description": "Set `enrollmentStatus = UNENROLLED` and record `unenrolledAt`. Hides the child from parent self-service immediately (PRD §6.3). Guardian links remain in DB for historical reference but no longer expose data.\n\nPhotos and videos tagged to the child are permanently deleted **30 days** after unenrollment (daily job at 03:30). Restoring before then keeps them."
               }
             },
             {
@@ -1495,7 +1525,7 @@
                     "restore"
                   ]
                 },
-                "description": "Re-enroll a previously unenrolled child (clears `unenrolledAt`). Parent access via existing guardian links becomes visible again."
+                "description": "Re-enroll a previously unenrolled child (clears `unenrolledAt`). Parent access via existing guardian links becomes visible again.\n\nIf the child's old room is archived or full, the child is restored **without a room** (`roomId: null`); assign one with **Reassign Room**."
               }
             },
             {
@@ -1922,7 +1952,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"email\": \"teacher1@nms.local\",\n  \"fullName\": \"Teacher One\",\n  \"role\": \"TEACHER\",\n  \"locale\": \"EN\",\n  \"phone\": \"+201000000000\"\n}"
                 },
-                "description": "Creates a new user invite. Requires the caller to have role ADMIN. The invited user is auto-attached to the inviting admin's nursery.\n\n**Body**\n- `email` (required, valid email, max 254)\n- `fullName` (required, max 200)\n- `role` (required) — `ADMIN`, `TEACHER`, or `PARENT`. `SUPER_ADMIN` is rejected (400).\n- `locale` (optional) — `EN` or `AR`, defaults to `EN`.\n- `phone` (optional, max 32)\n\nAdmins may invite **other admins** within their own nursery (co-admins / owner+manager pattern). To onboard the *first* admin of a brand-new nursery, use `Super Admin / Invite Admin`.\n\n**Response (201)** contains the invited `userId` and a one-time `token` to share with the invitee for `POST /api/auth/accept-invite`. The test script auto-saves both into `{{userId}}` and `{{inviteToken}}`.\n\nReturns 409 if the email already exists."
+                "description": "Creates a new user invite. Requires the caller to have role ADMIN. The invited user is auto-attached to the inviting admin's nursery.\n\n**Body**\n- `email` (required, valid email, max 254)\n- `fullName` (required, max 200)\n- `role` (required) — `ADMIN`, `TEACHER`, or `PARENT`. `SUPER_ADMIN` is rejected (400).\n- `locale` (optional) — `EN` or `AR`, defaults to `EN`.\n- `phone` (optional, max 32)\n\nAdmins may invite **other admins** within their own nursery (co-admins / owner+manager pattern). To onboard the *first* admin of a brand-new nursery, use `Super Admin / Invite Admin`.\n\n**Response (201)** contains the invited `userId` and a one-time `token` to share with the invitee for `POST /api/auth/accept-invite`. The test script auto-saves both into `{{userId}}` and `{{inviteToken}}`.\n\nReturns 409 if the email already exists.\n\nAn email that belongs to a **deleted** user of the same nursery and role can be invited again: the account is revived and its old invite links stop working. Any other existing email returns `409 Email already registered`."
               },
               "event": [
                 {
