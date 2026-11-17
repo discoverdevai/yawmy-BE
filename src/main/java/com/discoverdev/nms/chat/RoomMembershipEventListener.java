@@ -1,9 +1,12 @@
 package com.discoverdev.nms.chat;
 
+import com.discoverdev.nms.user.UserActivatedEvent;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -28,6 +31,7 @@ public class RoomMembershipEventListener {
      * it, since the operation is idempotent.
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onMembershipChanged(RoomMembershipChangedEvent event) {
         if (event.isEmpty()) return;
         try {
@@ -35,6 +39,17 @@ public class RoomMembershipEventListener {
         } catch (RuntimeException e) {
             log.error("Failed to reconcile room group membership for {}: {}",
                 event.roomIds(), e.getMessage(), e);
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onUserActivated(UserActivatedEvent event) {
+        try {
+            sync.reconcileNursery(event.nurseryId());
+        } catch (RuntimeException e) {
+            log.error("Failed to reconcile room group membership for nursery {}: {}",
+                event.nurseryId(), e.getMessage(), e);
         }
     }
 }

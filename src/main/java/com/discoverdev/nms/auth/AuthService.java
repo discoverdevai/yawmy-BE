@@ -8,6 +8,7 @@ import com.discoverdev.nms.config.PasswordResetProperties;
 import com.discoverdev.nms.user.AccessTokensInvalidatedEvent;
 import com.discoverdev.nms.user.Role;
 import com.discoverdev.nms.user.User;
+import com.discoverdev.nms.user.UserActivatedEvent;
 import com.discoverdev.nms.user.UserRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -202,6 +203,9 @@ public class AuthService {
         invite.setUsedAt(Instant.now());
         inviteRepository.save(invite);
 
+        if (user.getNursery() != null) {
+            events.publishEvent(new UserActivatedEvent(user.getId(), user.getNursery().getId()));
+        }
         return issueTokens(user);
     }
 
