@@ -4578,8 +4578,22 @@
                 "{{roomId}}"
               ]
             },
-            "description": "PRD §6.2 'Initiate room group chat (teacher is creator)'. Idempotent — one ROOM_GROUP per room. Adds all current room teachers + parents of enrolled children as participants."
-          }
+            "description": "PRD §6.2. Idempotent — one ROOM_GROUP per room; synchronizes current admins, assigned teachers and enrolled children's guardians. Saves `{{chatThreadId}}` for Get Thread/History."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Room group opens successfully', function () { pm.response.to.have.status(201); });",
+                  "const body = pm.response.json();",
+                  "pm.test('Response includes a room group thread id', function () { pm.expect(body.id).to.be.a('string'); pm.expect(body.type).to.eql('ROOM_GROUP'); });",
+                  "if (body.id) pm.collectionVariables.set('chatThreadId', body.id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Teacher / Open Staff Group",
@@ -4599,8 +4613,22 @@
                 "staff"
               ]
             },
-            "description": "PRD §6.2 'Staff chat: private group with all teachers + admin, no parents'. Idempotent — one per nursery."
-          }
+            "description": "PRD §6.2. Idempotent — one STAFF_GROUP per nursery, containing current enabled admins and teachers. Saves `{{chatThreadId}}` for Get Thread/History."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Staff group opens successfully', function () { pm.response.to.have.status(201); });",
+                  "const body = pm.response.json();",
+                  "pm.test('Response includes a staff group thread id', function () { pm.expect(body.id).to.be.a('string'); pm.expect(body.type).to.eql('STAFF_GROUP'); });",
+                  "if (body.id) pm.collectionVariables.set('chatThreadId', body.id);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Admin / Open DM with Any User",
@@ -4693,8 +4721,21 @@
                 "{{chatThreadId}}"
               ]
             },
-            "description": "Full thread metadata + full participant list (including those who left). Use this after opening a DM to grab the other party's userId for follow-up sends."
-          }
+            "description": "Full thread metadata + full participant list. For ROOM_GROUP/STAFF_GROUP, an eligible user whose participant row is stale is safely re-synchronized before access; users no longer entitled to the group still receive 404. Set `{{chatThreadId}}` by running a role-specific opener first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Thread is accessible to the current participant', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('Response matches the requested thread', function () { pm.expect(body.id).to.eql(pm.collectionVariables.get('chatThreadId')); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "History",

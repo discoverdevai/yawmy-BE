@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -249,22 +250,75 @@ public class ChatAccessService {
         // Every admin. They are in every room group, so a parent's question in the
         // room chat never goes unanswered because the room's teacher is off today.
         userRepository.findByNurseryIdAndRoleAndEnabledTrue(nursery.getId(), Role.ADMIN)
+            .stream().filter(admin -> admin.getDeletedAt() == null)
             .forEach(admin -> ensureActiveParticipant(thread, admin));
         // Teachers assigned to this room
-        teacherRoomRepository.findByRoomIdOrderByCreatedAtAsc(room.getId()).forEach(a ->
-            ensureActiveParticipant(thread, a.getTeacher()));
+        teacherRoomRepository.findByRoomIdOrderByCreatedAtAsc(room.getId()).stream()
+            .map(a -> a.getTeacher())
+            .filter(teacher -> teacher.isEnabled() && teacher.getDeletedAt() == null)
+            .forEach(teacher -> ensureActiveParticipant(thread, teacher));
         // Parents of enrolled children in this room
         childRepository.findByNurseryIdAndRoomIdAndEnrollmentStatusOrderByFullNameAsc(
                 nursery.getId(), room.getId(), EnrollmentStatus.ENROLLED).forEach(child ->
-            guardianLinkRepository.findByChildIdOrderByCreatedAtAsc(child.getId()).forEach(link ->
-                ensureActiveParticipant(thread, link.getGuardian())));
+            guardianLinkRepository.findByChildIdOrderByCreatedAtAsc(child.getId()).stream()
+                .map(GuardianLink::getGuardian)
+                .filter(guardian -> guardian.isEnabled() && guardian.getDeletedAt() == null)
+                .forEach(guardian -> ensureActiveParticipant(thread, guardian)));
     }
 
     private void syncStaffGroupParticipants(ChatThread thread, Nursery nursery) {
         userRepository.findByNurseryIdAndRoleAndEnabledTrue(nursery.getId(), Role.TEACHER)
+            .stream().filter(u -> u.getDeletedAt() == null)
             .forEach(u -> ensureActiveParticipant(thread, u));
         userRepository.findByNurseryIdAndRoleAndEnabledTrue(nursery.getId(), Role.ADMIN)
+            .stream().filter(u -> u.getDeletedAt() == null)
             .forEach(u -> ensureActiveParticipant(thread, u));
+    }
+
+    /**
+     * Repair a stale group membership when a user opens a thread they are still
+     * entitled to. Older participant rows can be missing or marked as left even
+     * though the user remains assigned to the room (or remains nursery staff).
+     * Never use the thread id alone as proof of access: re-check current role,
+     * nursery, and room relationship before restoring membership.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean repairGroupMembershipIfAuthorized(UUID threadId, UUID userId) {
+        ChatThread thread = threadRepository.findById(threadId).orElse(null);
+        User user = userRepository.findById(userId).orElse(null);
+        if (thread == null || user == null) return false;
+        if (user.getNursery() == null || user.getDeletedAt() != null || !user.isEnabled()
+            || !user.getNursery().getId().equals(thread.getNursery().getId())) {
+            return false;
+        }
+
+        if (thread.getType() == ChatThreadType.STAFF_GROUP) {
+            if (user.getRole() != Role.ADMIN && user.getRole() != Role.TEACHER) return false;
+            Nursery nursery = nurseryRepository.findById(thread.getNursery().getId())
+                .orElse(null);
+            if (nursery == null) return false;
+            syncStaffGroupParticipants(thread, nursery);
+            return true;
+        }
+
+        if (thread.getType() != ChatThreadType.ROOM_GROUP || thread.getRoom() == null) return false;
+        Room room = roomRepository.findByIdAndNurseryId(
+            thread.getRoom().getId(), thread.getNursery().getId()).orElse(null);
+        if (room == null || room.getArchivedAt() != null) return false;
+
+        boolean isMember = switch (user.getRole()) {
+            case ADMIN -> true;
+            case TEACHER -> teacherRoomRepository.existsByTeacherIdAndRoomId(user.getId(), room.getId());
+            case PARENT -> guardianLinkRepository.findByGuardianIdOrderByCreatedAtAsc(user.getId()).stream()
+                .map(GuardianLink::getChild)
+                .anyMatch(child -> child.getEnrollmentStatus() == EnrollmentStatus.ENROLLED
+                    && child.getRoom() != null && child.getRoom().getId().equals(room.getId()));
+            case SUPER_ADMIN -> false;
+        };
+        if (!isMember) return false;
+
+        syncRoomGroupParticipants(thread, room, room.getNursery());
+        return true;
     }
 
     private void ensureActiveParticipant(ChatThread thread, User user) {

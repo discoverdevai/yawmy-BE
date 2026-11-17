@@ -45,6 +45,7 @@ public class ChatService {
     private final ChatMessageHiddenRepository hiddenRepository;
     private final UserMuteRepository muteRepository;
     private final UserRepository userRepository;
+    private final ChatAccessService chatAccessService;
     private final ChatMessageBroadcaster broadcaster;
     private final ApplicationEventPublisher events;
 
@@ -58,6 +59,7 @@ public class ChatService {
         ChatMessageHiddenRepository hiddenRepository,
         UserMuteRepository muteRepository,
         UserRepository userRepository,
+        ChatAccessService chatAccessService,
         ChatMessageBroadcaster broadcaster,
         ApplicationEventPublisher events
     ) {
@@ -70,6 +72,7 @@ public class ChatService {
         this.hiddenRepository = hiddenRepository;
         this.muteRepository = muteRepository;
         this.userRepository = userRepository;
+        this.chatAccessService = chatAccessService;
         this.broadcaster = broadcaster;
         this.events = events;
     }
@@ -364,6 +367,10 @@ public class ChatService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found"));
         boolean active = participantRepository
             .existsByThreadIdAndUserIdAndLeftAtIsNull(threadId, user.getId());
+        if (!active && chatAccessService.repairGroupMembershipIfAuthorized(threadId, user.getId())) {
+            active = participantRepository
+                .existsByThreadIdAndUserIdAndLeftAtIsNull(threadId, user.getId());
+        }
         if (!active) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Thread not found");
         }
