@@ -67,7 +67,7 @@ public class AdminDashboardService {
 
         long totalChildren = childRepository.countByNurseryIdAndEnrollmentStatus(
             nurseryId, EnrollmentStatus.ENROLLED);
-        long totalTeachers = userRepository.countByNurseryIdAndRole(nurseryId, Role.TEACHER);
+        long totalTeachers = userRepository.countByNurseryIdAndRoleAndDeletedAtIsNull(nurseryId, Role.TEACHER);
 
         Instant todayStart = AttendanceDates.startOfDay(nursery, today);
         Instant todayEnd = AttendanceDates.startOfNextDay(nursery, today);

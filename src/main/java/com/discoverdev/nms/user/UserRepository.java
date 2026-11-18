@@ -15,6 +15,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     long countByNurseryIdAndRole(UUID nurseryId, Role role);
 
+    // Live accounts only: deleted staff stay in the table (soft delete) but are not counted.
+    long countByNurseryIdAndRoleAndDeletedAtIsNull(UUID nurseryId, Role role);
+
     List<User> findByNurseryIdAndRoleAndEnabledTrue(UUID nurseryId, Role role);
 
     List<User> findByNurseryIdAndRoleAndEnabledTrueOrderByFullNameAsc(UUID nurseryId, Role role);
