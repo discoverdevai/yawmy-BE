@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminRoomController {
 
     private final AdminRoomService adminRoomService;
+    private final RoomDeletionService roomDeletionService;
 
-    public AdminRoomController(AdminRoomService adminRoomService) {
+    public AdminRoomController(AdminRoomService adminRoomService, RoomDeletionService roomDeletionService) {
         this.adminRoomService = adminRoomService;
+        this.roomDeletionService = roomDeletionService;
     }
 
     @PostMapping
@@ -62,9 +65,20 @@ public class AdminRoomController {
         return adminRoomService.update(id, req);
     }
 
+    /**
+     * Plain DELETE archives the room (what the admin app uses today). With permanent=true it is
+     * Jira's Delete Room (YC-90): only a room that never had children or activity, else 409.
+     */
     @DeleteMapping("/{id}")
-    public RoomResponse archive(@PathVariable UUID id) {
-        return adminRoomService.archive(id);
+    public ResponseEntity<RoomResponse> archive(
+        @PathVariable UUID id,
+        @RequestParam(name = "permanent", defaultValue = "false") boolean permanent
+    ) {
+        if (permanent) {
+            roomDeletionService.delete(id);
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(adminRoomService.archive(id));
     }
 
     /**
