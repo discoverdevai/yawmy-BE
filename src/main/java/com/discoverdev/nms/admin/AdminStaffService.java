@@ -8,6 +8,7 @@ import com.discoverdev.nms.auth.InviteRepository;
 import com.discoverdev.nms.auth.MailService;
 import com.discoverdev.nms.auth.RefreshTokenRepository;
 import com.discoverdev.nms.auth.UserInvitationFactory;
+import com.discoverdev.nms.chat.ChatAccessService;
 import com.discoverdev.nms.config.InviteProperties;
 import com.discoverdev.nms.nursery.TeacherRoomAssignmentRepository;
 import com.discoverdev.nms.tenant.TenantContext;
@@ -37,6 +38,7 @@ public class AdminStaffService {
     private final InviteProperties inviteProperties;
     private final RefreshTokenRepository refreshTokenRepository;
     private final ApplicationEventPublisher events;
+    private final ChatAccessService chatAccessService;
 
     public AdminStaffService(
         UserRepository userRepository,
@@ -46,7 +48,8 @@ public class AdminStaffService {
         MailService mailService,
         InviteProperties inviteProperties,
         RefreshTokenRepository refreshTokenRepository,
-        ApplicationEventPublisher events
+        ApplicationEventPublisher events,
+        ChatAccessService chatAccessService
     ) {
         this.userRepository = userRepository;
         this.inviteRepository = inviteRepository;
@@ -56,6 +59,7 @@ public class AdminStaffService {
         this.inviteProperties = inviteProperties;
         this.refreshTokenRepository = refreshTokenRepository;
         this.events = events;
+        this.chatAccessService = chatAccessService;
     }
 
     /**
@@ -129,6 +133,7 @@ public class AdminStaffService {
     public void delete(UUID id) {
         User t = loadTeacher(id);
         assignmentRepository.deleteByTeacherId(t.getId()); // out of every room
+        chatAccessService.leaveAllChats(t);                 // …and out of every chat
         t.setEnabled(false);
         t.invalidateAccessTokens();
         t.setDeletedAt(Instant.now());

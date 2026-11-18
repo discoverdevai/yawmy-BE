@@ -383,6 +383,22 @@ public class ChatAccessService {
      * Revoke chat access for a parent who no longer has any enrolled children in the nursery.
      * Sets leftAt on every active participant row this parent has in this nursery.
      */
+    /**
+     * A deleted user leaves every chat in their nursery (room groups, staff group,
+     * direct threads). The messages they wrote stay, with a valid author.
+     */
+    @Transactional
+    public void leaveAllChats(User user) {
+        if (user.getNursery() == null) return;
+        List<ChatParticipant> active = participantRepository
+            .findActiveByUserAndNursery(user.getId(), user.getNursery().getId());
+        java.time.Instant now = java.time.Instant.now();
+        for (ChatParticipant p : active) {
+            p.setLeftAt(now);
+        }
+        participantRepository.saveAll(active);
+    }
+
     @Transactional
     public void revokeParentIfNoEnrolledChildren(User parent) {
         if (parent.getRole() != Role.PARENT) return;
