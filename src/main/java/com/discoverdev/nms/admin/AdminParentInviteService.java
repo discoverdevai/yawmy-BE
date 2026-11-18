@@ -57,7 +57,7 @@ public class AdminParentInviteService {
         for (EnrollFamilyRequest.Child c : req.children()) {
             // 1. Create the child (capacity is enforced inside AdminChildService).
             ChildResponse child = childService.create(
-                new CreateChildRequest(c.fullName(), c.dob(), c.roomId(), null, null, null));
+                new CreateChildRequest(c.fullName(), c.dob(), c.roomId(), null, null, null, c.gender()));
             childRefs.add(new EnrolledChild(child.id(), child.fullName()));
 
             // 2. Link the main parent as the primary guardian. On the first child
@@ -66,7 +66,7 @@ public class AdminParentInviteService {
             GuardianLinkResponse primary = guardianService.linkOrInvite(
                 child.id(),
                 new LinkOrInviteGuardianRequest(
-                    parent.email(), parent.fullName(), parent.relationship(), true, null, null),
+                    parent.email(), parent.fullName(), parent.relationship(), true, null, parent.phone()),
                 actor);
             parentId = primary.guardianId();
             if (primary.newInvite()) {

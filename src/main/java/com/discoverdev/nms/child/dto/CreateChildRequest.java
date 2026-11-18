@@ -1,5 +1,6 @@
 package com.discoverdev.nms.child.dto;
 
+import com.discoverdev.nms.child.Gender;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
@@ -13,5 +14,6 @@ public record CreateChildRequest(
     UUID roomId,
     @Size(max = 2000) String allergies,
     @Size(max = 2000) String medicalNotes,
-    @Size(max = 2000) String immunizations
+    @Size(max = 2000) String immunizations,
+    Gender gender
 ) {}

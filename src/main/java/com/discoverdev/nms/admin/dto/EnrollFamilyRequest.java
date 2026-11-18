@@ -24,7 +24,8 @@ public record EnrollFamilyRequest(
     public record Parent(
         @NotBlank @Email @Size(max = 254) String email,
         @NotBlank @Size(max = 200) String fullName,
-        @NotBlank @Size(max = 50) String relationship
+        @NotBlank @Size(max = 50) String relationship,
+        @Size(max = 32) String phone
     ) {}
 
     public record Child(
@@ -32,7 +33,8 @@ public record EnrollFamilyRequest(
         @NotNull @Past LocalDate dob,
         UUID roomId,
         @Valid List<Guardian> guardians,
-        @Valid List<Pickup> pickups
+        @Valid List<Pickup> pickups,
+        com.discoverdev.nms.child.Gender gender
     ) {}
 
     /** An additional guardian — contact info only (saved as an emergency contact). */

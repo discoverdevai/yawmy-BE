@@ -1,5 +1,6 @@
 package com.discoverdev.nms.child.dto;
 
+import com.discoverdev.nms.child.Gender;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -9,5 +10,6 @@ public record UpdateChildRequest(
     @Past LocalDate dob,
     @Size(max = 2000) String allergies,
     @Size(max = 2000) String medicalNotes,
-    @Size(max = 2000) String immunizations
+    @Size(max = 2000) String immunizations,
+    Gender gender
 ) {}

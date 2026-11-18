@@ -1,5 +1,6 @@
 package com.discoverdev.nms.child.dto;
 
+import com.discoverdev.nms.child.Gender;
 import com.discoverdev.nms.child.Child;
 import com.discoverdev.nms.child.EnrollmentStatus;
 import java.time.Instant;
@@ -19,7 +20,8 @@ public record ChildResponse(
     EnrollmentStatus enrollmentStatus,
     Instant unenrolledAt,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    Gender gender
 ) {
     public static ChildResponse of(Child c) {
         return new ChildResponse(
@@ -35,7 +37,8 @@ public record ChildResponse(
             c.getEnrollmentStatus(),
             c.getUnenrolledAt(),
             c.getCreatedAt(),
-            c.getUpdatedAt()
+            c.getUpdatedAt(),
+            c.getGender()
         );
     }
 }

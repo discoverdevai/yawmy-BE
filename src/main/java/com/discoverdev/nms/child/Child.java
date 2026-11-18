@@ -58,6 +58,11 @@ public class Child {
     @Column(name = "dob", nullable = false)
     private LocalDate dob;
 
+    // Optional so children enrolled before this field existed stay valid.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender", length = 8)
+    private Gender gender;
+
     @Column(name = "photo_key", length = 255)
     private String photoKey;
 

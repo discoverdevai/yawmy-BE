@@ -10,5 +10,6 @@ import jakarta.validation.constraints.Size;
 public record UpdateParentRequest(
     @Size(min = 1, max = 200) String fullName,
     @Email @Size(max = 255) String email,
-    @Size(max = 50) String relationship
+    @Size(max = 50) String relationship,
+    @Size(max = 32) String phone
 ) {}

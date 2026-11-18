@@ -15,5 +15,6 @@ public record ParentResponse(
     String relationship,
     String imageUrl,
     String status,
-    Instant joinedAt
+    Instant joinedAt,
+    String phone
 ) {}

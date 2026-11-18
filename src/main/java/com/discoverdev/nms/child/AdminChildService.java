@@ -29,6 +29,7 @@ public class AdminChildService {
     private final GuardianLinkRepository guardianLinkRepository;
     private final ChatAccessService chatAccess;
     private final ApplicationEventPublisher events;
+    private final ChildHealthService health;
 
     public AdminChildService(
         ChildRepository childRepository,
@@ -36,7 +37,8 @@ public class AdminChildService {
         NurseryRepository nurseryRepository,
         GuardianLinkRepository guardianLinkRepository,
         ChatAccessService chatAccess,
-        ApplicationEventPublisher events
+        ApplicationEventPublisher events,
+        ChildHealthService health
     ) {
         this.childRepository = childRepository;
         this.roomRepository = roomRepository;
@@ -44,6 +46,7 @@ public class AdminChildService {
         this.guardianLinkRepository = guardianLinkRepository;
         this.chatAccess = chatAccess;
         this.events = events;
+        this.health = health;
     }
 
     /** Ask the chat layer to re-derive who belongs in these rooms' group chats. */
@@ -70,12 +73,17 @@ public class AdminChildService {
             .room(room)
             .fullName(req.fullName())
             .dob(req.dob())
+            .gender(req.gender())
             .allergies(req.allergies())
             .medicalNotes(req.medicalNotes())
             .immunizations(req.immunizations())
             .enrollmentStatus(EnrollmentStatus.ENROLLED)
             .build();
         Child saved = childRepository.save(child);
+        // The text fields are also kept as lists of entries (Jira YC-231..233).
+        if (req.allergies() != null) health.replaceFromText(saved, HealthEntryType.ALLERGY, req.allergies());
+        if (req.immunizations() != null) health.replaceFromText(saved, HealthEntryType.IMMUNIZATION, req.immunizations());
+        if (req.medicalNotes() != null) health.replaceFromText(saved, HealthEntryType.MEDICAL_NOTE, req.medicalNotes());
         // Guardians are linked afterwards, so this usually finds nothing to add —
         // but a child created straight into a room still belongs in its chat.
         announceRoomChange(roomIdOf(saved));
@@ -110,9 +118,19 @@ public class AdminChildService {
         Child child = loadOwned(id);
         if (req.fullName() != null) child.setFullName(req.fullName());
         if (req.dob() != null) child.setDob(req.dob());
-        if (req.allergies() != null) child.setAllergies(req.allergies());
-        if (req.medicalNotes() != null) child.setMedicalNotes(req.medicalNotes());
-        if (req.immunizations() != null) child.setImmunizations(req.immunizations());
+        if (req.gender() != null) child.setGender(req.gender());
+        if (req.allergies() != null) {
+            child.setAllergies(req.allergies());
+            health.replaceFromText(child, HealthEntryType.ALLERGY, req.allergies());
+        }
+        if (req.medicalNotes() != null) {
+            child.setMedicalNotes(req.medicalNotes());
+            health.replaceFromText(child, HealthEntryType.MEDICAL_NOTE, req.medicalNotes());
+        }
+        if (req.immunizations() != null) {
+            child.setImmunizations(req.immunizations());
+            health.replaceFromText(child, HealthEntryType.IMMUNIZATION, req.immunizations());
+        }
         return ChildResponse.of(childRepository.save(child));
     }
 

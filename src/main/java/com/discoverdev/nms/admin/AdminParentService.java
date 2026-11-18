@@ -60,7 +60,7 @@ public class AdminParentService {
                     .orElse(null);
                 return new ParentResponse(
                     p.getId(), p.getFullName(), p.getEmail(), relationship,
-                    p.getImageUrl(), statusOf(p), p.getCreatedAt());
+                    p.getImageUrl(), statusOf(p), p.getCreatedAt(), p.getPhone());
             })
             .toList();
     }
@@ -83,6 +83,9 @@ public class AdminParentService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already in use");
             }
             p.setEmail(req.email());
+        }
+        if (req.phone() != null) {
+            p.setPhone(req.phone().isBlank() ? null : req.phone().trim());
         }
         userRepository.save(p);
 
@@ -198,7 +201,7 @@ public class AdminParentService {
             .toList();
         return new ParentDetailResponse(
             p.getId(), p.getFullName(), p.getEmail(), relationship,
-            p.getImageUrl(), statusOf(p), p.getCreatedAt(), children);
+            p.getImageUrl(), statusOf(p), p.getCreatedAt(), children, p.getPhone());
     }
 
     private String statusOf(User parent) {

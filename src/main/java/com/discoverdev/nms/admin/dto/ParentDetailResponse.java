@@ -13,7 +13,8 @@ public record ParentDetailResponse(
     String imageUrl,
     String status,
     Instant joinedAt,
-    List<LinkedChild> children
+    List<LinkedChild> children,
+    String phone
 ) {
     public record LinkedChild(UUID id, String fullName, String roomName) {}
 }
