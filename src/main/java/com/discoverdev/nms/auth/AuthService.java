@@ -174,9 +174,11 @@ public class AuthService {
         log.info("Signed out one device for user {}", user.getId());
     }
 
-    /** Sign out everywhere: revokes every active refresh token for the user. */
+    /** Sign out everywhere: revokes every refresh token and every access token already issued. */
     @Transactional
     public void logoutAll(User user) {
+        invalidateAccessTokens(user);
+        userRepository.save(user);
         int revoked = refreshTokenRepository.revokeAllForUser(user, Instant.now());
         log.info("Revoked {} refresh tokens for user {}", revoked, user.getId());
     }
