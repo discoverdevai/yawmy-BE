@@ -17,6 +17,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UpdateTimestamp;
 
 @Entity
@@ -27,6 +28,8 @@ import org.hibernate.annotations.UpdateTimestamp;
         @Index(name = "idx_rooms_nursery_archived", columnList = "nursery_id, archived_at")
     }
 )
+// Soft delete (Jira YC-90): a deleted room keeps its row but is invisible to every query.
+@SQLRestriction("deleted_at IS NULL")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -59,6 +62,10 @@ public class Room {
 
     @Column(name = "archived_at")
     private Instant archivedAt;
+
+    /** Set when the room is deleted (soft delete); the row stays for history. */
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -10,8 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Delete Room (Jira YC-90): only a room that never had children or any activity can be
- * deleted; anything with history can only be archived. Reached with
+ * Delete Room (Jira YC-90), a soft delete: only a room that never had children or any activity
+ * can be deleted; anything with history can only be archived. Reached with
  * DELETE /api/admin/rooms/{id}?permanent=true — plain DELETE keeps archiving, which the
  * current admin app relies on.
  */
@@ -48,13 +48,14 @@ public class RoomDeletionService {
                 "This room has had children or activity, so it can only be archived");
         }
 
-        // Nothing but its (empty) group chat and teacher links refer to it: remove them, then the room.
+        // Soft delete: the room row stays (deleted_at set) and disappears from every query.
+        // Its empty group chat and its teacher links go, so it shows up nowhere.
         String threads = "(SELECT id FROM chat_threads WHERE room_id = :room)";
         exec("DELETE FROM chat_thread_reads WHERE thread_id IN " + threads, roomId);
         exec("DELETE FROM chat_participants WHERE thread_id IN " + threads, roomId);
         exec("DELETE FROM chat_threads WHERE room_id = :room", roomId);
         exec("DELETE FROM teacher_room_assignments WHERE room_id = :room", roomId);
-        exec("DELETE FROM rooms WHERE id = :room", roomId);
+        exec("UPDATE rooms SET deleted_at = now() WHERE id = :room", roomId);
         em.clear();
     }
 

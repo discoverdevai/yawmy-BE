@@ -73,8 +73,9 @@ public class ChildHealthService {
     @Transactional
     public void delete(UUID childId, HealthEntryType type, UUID entryId) {
         Child child = loadForAdmin(childId);
-        entries.delete(loadEntry(child, type, entryId));
-        entries.flush();
+        ChildHealthEntry e = loadEntry(child, type, entryId);
+        e.setDeletedAt(java.time.Instant.now());
+        entries.saveAndFlush(e);
         syncText(child, type);
     }
 
@@ -95,8 +96,10 @@ public class ChildHealthService {
     /** The old text field was written (current apps): rebuild the list from its lines. */
     @Transactional
     public void replaceFromText(Child child, HealthEntryType type, String text) {
-        entries.deleteByChildIdAndType(child.getId(), type);
-        entries.flush();
+        java.time.Instant now = java.time.Instant.now();
+        List<ChildHealthEntry> old = entries.findByChildIdAndTypeOrderByCreatedAtAscIdAsc(child.getId(), type);
+        old.forEach(e -> e.setDeletedAt(now));
+        entries.saveAllAndFlush(old);
         List<String> lines = text == null ? List.of() : Arrays.stream(text.split("\\R"))
             .map(String::trim).filter(l -> !l.isEmpty()).toList();
         for (String line : lines) {

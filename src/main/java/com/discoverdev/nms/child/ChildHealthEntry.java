@@ -20,6 +20,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLRestriction;
 
 /** One entry in a child's allergy, immunization or medical-note list. */
 @Entity
@@ -27,6 +28,7 @@ import org.hibernate.annotations.CreationTimestamp;
     name = "child_health_entries",
     indexes = @Index(name = "idx_health_child_type", columnList = "child_id, type")
 )
+@SQLRestriction("deleted_at IS NULL")   // soft delete: removed entries keep their row
 @Getter
 @Setter
 @NoArgsConstructor
@@ -56,4 +58,7 @@ public class ChildHealthEntry {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 }
