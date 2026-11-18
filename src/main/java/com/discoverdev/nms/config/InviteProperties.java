@@ -23,6 +23,15 @@ public record InviteProperties(
      * no way to open it — which is exactly what happens when a call site picks
      * the base URL by hand and picks the wrong one.
      */
+    /** How long an invite link works, for the emails: "7 days", "1 day" or "36 hours". */
+    public String validityText() {
+        if (ttlHours % 24 == 0) {
+            long days = ttlHours / 24;
+            return days == 1 ? "1 day" : days + " days";
+        }
+        return ttlHours == 1 ? "1 hour" : ttlHours + " hours";
+    }
+
     public String linkFor(Role role, String token) {
         String base = switch (role) {
             case TEACHER -> teacherLinkBaseUrl;

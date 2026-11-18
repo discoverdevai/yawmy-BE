@@ -64,7 +64,8 @@ app:
     access-token-ttl-minutes: 30
     refresh-token-ttl-days: 14
   invite:
-    ttl-hours: 48
+    # How long an invite link works. 168 hours = 7 days.
+    ttl-hours: ${APP_INVITE_TTL_HOURS:168}
     link-base-url: ${APP_INVITE_LINK_BASE_URL:nurseryadmin://invitation}
     teacher-link-base-url: ${APP_TEACHER_INVITE_LINK_BASE_URL:nurseryteacher://invitation}
     parent-link-base-url: ${APP_PARENT_INVITE_LINK_BASE_URL:nurseryparent://invitation}

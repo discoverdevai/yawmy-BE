@@ -1,5 +1,6 @@
 package com.discoverdev.nms.auth;
 
+import com.discoverdev.nms.config.InviteProperties;
 import com.discoverdev.nms.config.MailProperties;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
@@ -21,10 +22,12 @@ public class MailService {
 
     private final JavaMailSender mailSender;
     private final MailProperties props;
+    private final InviteProperties inviteProperties;
 
-    public MailService(JavaMailSender mailSender, MailProperties props) {
+    public MailService(JavaMailSender mailSender, MailProperties props, InviteProperties inviteProperties) {
         this.mailSender = mailSender;
         this.props = props;
+        this.inviteProperties = inviteProperties;
     }
 
     public void sendAdminInvite(String toEmail, String fullName, String inviteLink) {
@@ -38,10 +41,10 @@ public class MailService {
 
             %s
 
-            This invitation expires in 48 hours.
+            This invitation expires in %s.
 
             If you did not expect this, you can ignore this email.
-            """.formatted(greeting, inviteLink);
+            """.formatted(greeting, inviteLink, inviteProperties.validityText());
         send(toEmail, subject, body);
     }
 
@@ -87,10 +90,10 @@ public class MailService {
 
             %s
 
-            This invitation expires in 48 hours.
+            This invitation expires in %s.
 
             If you did not expect this, you can ignore this email.
-            """.formatted(greeting, inviteLink);
+            """.formatted(greeting, inviteLink, inviteProperties.validityText());
         send(toEmail, subject, body);
     }
 
@@ -105,10 +108,10 @@ public class MailService {
 
             %s
 
-            This invitation expires in 48 hours.
+            This invitation expires in %s.
 
             If you did not expect this, you can ignore this email.
-            """.formatted(greeting, inviteLink);
+            """.formatted(greeting, inviteLink, inviteProperties.validityText());
         send(toEmail, subject, body);
     }
 
