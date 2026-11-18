@@ -39,9 +39,17 @@ public class AdminRoomController {
 
     @GetMapping
     public List<RoomResponse> list(
-        @RequestParam(name = "includeArchived", defaultValue = "false") boolean includeArchived
+        @RequestParam(name = "includeArchived", defaultValue = "false") boolean includeArchived,
+        @RequestParam(name = "status", required = false) String status,
+        @RequestParam(name = "search", required = false) String search
     ) {
-        return adminRoomService.list(includeArchived);
+        // status=active|archived (Jira YC-84) wins; otherwise includeArchived keeps its old meaning.
+        if (status != null && !status.equalsIgnoreCase("active") && !status.equalsIgnoreCase("archived")) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST, "status must be 'active' or 'archived'");
+        }
+        String effective = status != null ? status.toLowerCase() : (includeArchived ? null : "active");
+        return adminRoomService.list(effective, search);
     }
 
     @GetMapping("/{id}")

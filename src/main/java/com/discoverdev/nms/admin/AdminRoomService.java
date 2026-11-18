@@ -5,6 +5,7 @@ import com.discoverdev.nms.admin.dto.CreateRoomRequest;
 import com.discoverdev.nms.admin.dto.RoomResponse;
 import com.discoverdev.nms.admin.dto.UpdateRoomRequest;
 import com.discoverdev.nms.chat.ChatAccessService;
+import com.discoverdev.nms.chat.RoomMembershipChangedEvent;
 import com.discoverdev.nms.child.Child;
 import com.discoverdev.nms.child.ChildRepository;
 import com.discoverdev.nms.child.EnrollmentStatus;
@@ -12,13 +13,16 @@ import com.discoverdev.nms.nursery.Nursery;
 import com.discoverdev.nms.nursery.NurseryRepository;
 import com.discoverdev.nms.nursery.Room;
 import com.discoverdev.nms.nursery.RoomRepository;
+import com.discoverdev.nms.nursery.TeacherRoomAssignmentRepository;
 import com.discoverdev.nms.tenant.TenantContext;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,19 +39,25 @@ public class AdminRoomService {
     private final ChildRepository childRepository;
     private final AdminTeacherAssignmentService teacherAssignmentService;
     private final ChatAccessService chatAccess;
+    private final TeacherRoomAssignmentRepository teacherRoomRepository;
+    private final ApplicationEventPublisher events;
 
     public AdminRoomService(
         RoomRepository roomRepository,
         NurseryRepository nurseryRepository,
         ChildRepository childRepository,
         AdminTeacherAssignmentService teacherAssignmentService,
-        ChatAccessService chatAccess
+        ChatAccessService chatAccess,
+        TeacherRoomAssignmentRepository teacherRoomRepository,
+        ApplicationEventPublisher events
     ) {
         this.roomRepository = roomRepository;
         this.nurseryRepository = nurseryRepository;
         this.childRepository = childRepository;
         this.teacherAssignmentService = teacherAssignmentService;
         this.chatAccess = chatAccess;
+        this.teacherRoomRepository = teacherRoomRepository;
+        this.events = events;
     }
 
     /** Room response with its current enrolled-child count. */
@@ -85,10 +95,23 @@ public class AdminRoomService {
 
     @Transactional(readOnly = true)
     public List<RoomResponse> list(boolean includeArchived) {
+        return list(includeArchived ? null : "active", null);
+    }
+
+    /**
+     * Rooms A to Z. {@code status} is "active", "archived", or null for both;
+     * {@code search} matches part of the room name, ignoring case.
+     */
+    @Transactional(readOnly = true)
+    public List<RoomResponse> list(String status, String search) {
         UUID nurseryId = TenantContext.currentNurseryId();
-        List<Room> rooms = includeArchived
-            ? roomRepository.findByNurseryIdOrderByNameAsc(nurseryId)
-            : roomRepository.findByNurseryIdAndArchivedAtIsNullOrderByNameAsc(nurseryId);
+        String needle = search == null || search.isBlank() ? null : search.trim().toLowerCase();
+        List<Room> rooms = roomRepository.findByNurseryIdOrderByNameAsc(nurseryId).stream()
+            .filter(r -> status == null
+                || ("active".equalsIgnoreCase(status) && r.getArchivedAt() == null)
+                || ("archived".equalsIgnoreCase(status) && r.getArchivedAt() != null))
+            .filter(r -> needle == null || r.getName().toLowerCase().contains(needle))
+            .toList();
 
         // One grouped query for all room child-counts (no N+1).
         Map<UUID, Long> counts = childRepository
@@ -134,16 +157,26 @@ public class AdminRoomService {
         return toResponse(roomRepository.save(room));
     }
 
+    /**
+     * Archives a room in one transaction: the given children lose their room (they stay
+     * enrolled), the room's teachers are unassigned, and its group chat is emptied.
+     */
+    private void finishArchive(Room room, Collection<Child> unassign) {
+        unassign.forEach(c -> c.setRoom(null));
+        childRepository.saveAll(unassign);
+        teacherRoomRepository.deleteByRoomId(room.getId());
+        room.setArchivedAt(Instant.now());
+        roomRepository.save(room);
+        events.publishEvent(RoomMembershipChangedEvent.of(room.getId()));
+    }
+
     @Transactional
     public RoomResponse archive(UUID id) {
         Room room = loadOwned(id);
         if (room.getArchivedAt() == null) {
-            if (childRepository.countByRoomIdAndEnrollmentStatus(room.getId(), EnrollmentStatus.ENROLLED) > 0) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Reassign this room's children before archiving it");
-            }
-            room.setArchivedAt(Instant.now());
-            roomRepository.save(room);
+            // "Archive Anyway": the room's children stay enrolled but no longer have a room.
+            finishArchive(room, childRepository.findByNurseryIdAndRoomIdAndEnrollmentStatusOrderByFullNameAsc(
+                TenantContext.currentNurseryId(), room.getId(), EnrollmentStatus.ENROLLED));
         }
         return toResponse(room);
     }
@@ -188,12 +221,6 @@ public class AdminRoomService {
             desired.put(m.childId(), m.roomId());
         }
 
-        // Every child in the room must be accounted for before we archive it.
-        if (desired.size() < sourceChildren.size()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "All children must be reassigned before archiving the room");
-        }
-
         // Validate each destination room's capacity against the incoming batch.
         Map<UUID, Long> incoming = desired.values().stream()
             .collect(Collectors.groupingBy(id -> id, Collectors.counting()));
@@ -209,18 +236,19 @@ public class AdminRoomService {
                 target.getId(), EnrollmentStatus.ENROLLED);
             if (current + e.getValue() > target.getCapacity()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Room " + target.getName() + " is full (max " + target.getCapacity() + " children)");
+                    "Room " + target.getName() + " is full (" + target.getCapacity() + " of " + target.getCapacity() + " places taken)");
             }
             targets.put(target.getId(), target);
         }
 
-        // Apply the moves, then archive the emptied room.
+        // Apply the moves; children that weren't moved stay enrolled without a room.
         desired.forEach((childId, targetRoomId) ->
             childrenById.get(childId).setRoom(targets.get(targetRoomId)));
         childRepository.saveAll(childrenById.values());
+        List<Child> leftOver = sourceChildren.stream().filter(c -> !desired.containsKey(c.getId())).toList();
 
-        source.setArchivedAt(Instant.now());
-        roomRepository.save(source);
+        finishArchive(source, leftOver);
+        events.publishEvent(RoomMembershipChangedEvent.of(desired.values().toArray(UUID[]::new)));
         return toResponse(source);
     }
 

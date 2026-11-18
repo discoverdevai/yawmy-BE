@@ -196,7 +196,7 @@ public class AdminChildService {
             room.getId(), EnrollmentStatus.ENROLLED);
         if (current >= room.getCapacity()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                "Room is full (max " + room.getCapacity() + " children)");
+                "This room is full (" + room.getCapacity() + " of " + room.getCapacity() + " places taken)");
         }
     }
 }
