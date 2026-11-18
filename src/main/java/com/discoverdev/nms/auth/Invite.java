@@ -59,8 +59,12 @@ public class Invite {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /**
+     * An invite exists to activate a disabled account. Once the account is active,
+     * every invite for it is spent, so an older link can't set a new password on it.
+     */
     public boolean isUsed() {
-        return usedAt != null;
+        return usedAt != null || (user != null && user.isEnabled());
     }
 
     public boolean isExpired() {

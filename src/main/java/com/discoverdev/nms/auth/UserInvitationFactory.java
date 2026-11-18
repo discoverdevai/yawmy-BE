@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Component
@@ -78,7 +79,10 @@ public class UserInvitationFactory {
      * Issues a fresh invite token for an EXISTING (still-disabled) user — used when a
      * super-admin reactivates an admin whose original invite expired.
      */
+    @Transactional
     public IssuedInvite reissueInvite(User user, User invitedBy) {
+        // The new link replaces the old ones: they stop working now, not at their own expiry.
+        inviteRepository.closePendingForUser(user.getId(), Instant.now());
         String rawToken = Tokens.generateRawToken();
         Instant expiresAt = Instant.now().plus(inviteTtl);
         Invite invite = Invite.builder()
