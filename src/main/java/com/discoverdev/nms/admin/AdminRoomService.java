@@ -123,7 +123,14 @@ public class AdminRoomService {
             }
             room.setName(req.name());
         }
-        if (req.capacity() != null) room.setCapacity(req.capacity());
+        if (req.capacity() != null) {
+            long enrolled = childRepository.countByRoomIdAndEnrollmentStatus(room.getId(), EnrollmentStatus.ENROLLED);
+            if (req.capacity() < enrolled) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This room has " + enrolled + " children, so its capacity can't be lower than " + enrolled);
+            }
+            room.setCapacity(req.capacity());
+        }
         return toResponse(roomRepository.save(room));
     }
 
