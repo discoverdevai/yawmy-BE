@@ -20,17 +20,20 @@ public class AdminInviteService {
     private final UserRepository userRepository;
     private final MailService mailService;
     private final InviteProperties inviteProperties;
+    private final AdminTeacherAssignmentService teacherAssignmentService;
 
     public AdminInviteService(
         UserInvitationFactory invitationFactory,
         UserRepository userRepository,
         MailService mailService,
-        InviteProperties inviteProperties
+        InviteProperties inviteProperties,
+        AdminTeacherAssignmentService teacherAssignmentService
     ) {
         this.invitationFactory = invitationFactory;
         this.userRepository = userRepository;
         this.mailService = mailService;
         this.inviteProperties = inviteProperties;
+        this.teacherAssignmentService = teacherAssignmentService;
     }
 
     @Transactional
@@ -58,6 +61,16 @@ public class AdminInviteService {
                 u.setStaffRole(req.staffRole());
                 userRepository.save(u);
             });
+        }
+
+        // Jira YC-116: a new teacher can be assigned to rooms on the Add Teacher screen.
+        if (req.roomIds() != null && !req.roomIds().isEmpty()) {
+            if (req.role() != Role.TEACHER) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only teachers can be assigned to rooms");
+            }
+            for (java.util.UUID roomId : new java.util.LinkedHashSet<>(req.roomIds())) {
+                teacherAssignmentService.assign(roomId, issued.userId());
+            }
         }
 
         // Email the invite link — teacher-app link for teachers, admin-app link for admins.

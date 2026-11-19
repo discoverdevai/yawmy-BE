@@ -18,5 +18,7 @@ public record CreateInviteRequest(
     @NotNull Role role,
     StaffRole staffRole,
     Locale locale,
-    @Size(max = 32) String phone
+    @Size(max = 32) String phone,
+    // Jira YC-116: rooms to assign a new teacher to straight away (optional).
+    java.util.List<java.util.UUID> roomIds
 ) {}
