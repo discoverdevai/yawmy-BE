@@ -11,6 +11,7 @@ import com.discoverdev.nms.chat.dto.ThreadSummaryResponse;
 import com.discoverdev.nms.media.MediaItem;
 import com.discoverdev.nms.media.MediaItemRepository;
 import com.discoverdev.nms.nursery.Nursery;
+import com.discoverdev.nms.nursery.RoomRepository;
 import com.discoverdev.nms.user.Role;
 import com.discoverdev.nms.user.User;
 import com.discoverdev.nms.user.UserRepository;
@@ -48,6 +49,10 @@ public class ChatService {
     private final ChatAccessService chatAccessService;
     private final ChatMessageBroadcaster broadcaster;
     private final ApplicationEventPublisher events;
+
+    /** Only to tell which rooms still exist; a field so the constructor other code builds on stays as is. */
+    @org.springframework.beans.factory.annotation.Autowired
+    private RoomRepository roomRepository;
 
     public ChatService(
         ChatThreadRepository threadRepository,
@@ -138,9 +143,18 @@ public class ChatService {
     public List<ThreadSummaryResponse> listThreadsForUser(User user) {
         List<ChatParticipant> active = participantRepository
             .findActiveByUserAndNursery(user.getId(), user.getNursery().getId());
+        // A room group whose room is gone (deleted, or hidden from queries) is left out instead of
+        // failing the whole inbox when its room name is read.
+        Set<UUID> roomIds = new HashSet<>();
+        for (ChatParticipant cp : active) {
+            if (cp.getThread().getRoom() != null) roomIds.add(cp.getThread().getRoom().getId());
+        }
+        Set<UUID> liveRooms = new HashSet<>();
+        roomRepository.findAllById(roomIds).forEach(r -> liveRooms.add(r.getId()));
         List<ThreadSummaryResponse> out = new ArrayList<>();
         for (ChatParticipant cp : active) {
             ChatThread t = cp.getThread();
+            if (t.getRoom() != null && !liveRooms.contains(t.getRoom().getId())) continue;
             ChatMessage last = messageRepository
                 .findTopByThreadIdAndDeletedAtIsNullOrderByCreatedAtDesc(t.getId())
                 .orElse(null);
