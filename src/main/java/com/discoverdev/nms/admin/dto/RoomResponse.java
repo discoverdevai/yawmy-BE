@@ -12,7 +12,9 @@ public record RoomResponse(
     long childCount,
     boolean archived,
     Instant archivedAt,
-    Instant createdAt
+    Instant createdAt,
+    Integer ageMinMonths,
+    Integer ageMaxMonths
 ) {
     public static RoomResponse of(Room r, long childCount) {
         return new RoomResponse(
@@ -23,7 +25,9 @@ public record RoomResponse(
             childCount,
             r.getArchivedAt() != null,
             r.getArchivedAt(),
-            r.getCreatedAt()
+            r.getCreatedAt(),
+            r.getAgeMinMonths(),
+            r.getAgeMaxMonths()
         );
     }
 

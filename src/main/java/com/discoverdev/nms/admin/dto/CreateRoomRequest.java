@@ -12,5 +12,10 @@ import java.util.UUID;
 public record CreateRoomRequest(
     @NotBlank @Size(max = 100) String name,
     @Min(1) Integer capacity,
-    UUID teacherId
+    UUID teacherId,
+    // Jira YC-85 (all optional; the current app sends none of these):
+    @jakarta.validation.constraints.Min(0) Integer ageMinMonths,
+    @jakarta.validation.constraints.Min(0) Integer ageMaxMonths,
+    java.util.List<UUID> teacherIds,
+    java.util.List<UUID> childIds
 ) {}

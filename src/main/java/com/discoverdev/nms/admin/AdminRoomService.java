@@ -16,7 +16,12 @@ import com.discoverdev.nms.nursery.RoomRepository;
 import com.discoverdev.nms.nursery.TeacherRoomAssignmentRepository;
 import com.discoverdev.nms.tenant.TenantContext;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,7 +83,11 @@ public class AdminRoomService {
             .nursery(nursery)
             .name(req.name())
             .capacity(req.capacity() != null ? req.capacity() : DEFAULT_CAPACITY)
+            .ageMinMonths(req.ageMinMonths())
+            .ageMaxMonths(req.ageMaxMonths())
             .build();
+        checkAgeRange(room.getAgeMinMonths(), room.getAgeMaxMonths());
+        List<Child> picked = req.childIds() == null ? List.of() : loadChildrenForRoom(req.childIds(), room);
         room = roomRepository.save(room);
 
         // Every room owns a group chat from the moment it exists, so it can be
@@ -87,9 +96,14 @@ public class AdminRoomService {
         chatAccess.ensureRoomGroup(room, TenantContext.currentUser());
 
         // Optionally assign a teacher picked in the "add room" modal.
-        if (req.teacherId() != null) {
-            teacherAssignmentService.assign(room.getId(), req.teacherId());
+        Set<UUID> teachers = new LinkedHashSet<>();
+        if (req.teacherId() != null) teachers.add(req.teacherId());
+        if (req.teacherIds() != null) teachers.addAll(req.teacherIds());
+        for (UUID teacherId : teachers) {
+            teacherAssignmentService.assign(room.getId(), teacherId);
         }
+        // Jira YC-85: children can be picked while creating the room (capacity-limited).
+        moveChildrenInto(room, picked);
         return toResponse(room);
     }
 
@@ -148,13 +162,52 @@ public class AdminRoomService {
         }
         if (req.capacity() != null) {
             long enrolled = childRepository.countByRoomIdAndEnrollmentStatus(room.getId(), EnrollmentStatus.ENROLLED);
-            if (req.capacity() < enrolled) {
+            if (req.childIds() == null && req.capacity() < enrolled) {   // with childIds, the final list is checked below
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "This room has " + enrolled + " children, so its capacity can't be lower than " + enrolled);
             }
             room.setCapacity(req.capacity());
         }
-        return toResponse(roomRepository.save(room));
+        // Jira YC-86: age range, and the full lists of teachers and children.
+        Integer min = req.ageMinMonths() != null ? req.ageMinMonths() : room.getAgeMinMonths();
+        Integer max = req.ageMaxMonths() != null ? req.ageMaxMonths() : room.getAgeMaxMonths();
+        checkAgeRange(min, max);
+        room.setAgeMinMonths(min);
+        room.setAgeMaxMonths(max);
+        List<Child> current = childRepository.findByNurseryIdAndRoomIdAndEnrollmentStatusOrderByFullNameAsc(
+            TenantContext.currentNurseryId(), room.getId(), EnrollmentStatus.ENROLLED);
+        List<Child> wanted = req.childIds() == null ? current : loadChildrenForRoom(req.childIds(), room);
+        if (wanted.size() > room.getCapacity()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Only " + room.getCapacity() + " children fit in this room");
+        }
+        for (Child c : wanted) {
+            if (!fitsAgeRange(c, min, max)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    c.getFullName() + " is outside this room's age range");
+            }
+        }
+        room = roomRepository.save(room);
+        if (req.childIds() != null) {
+            Set<UUID> keep = new HashSet<>(req.childIds());
+            List<Child> leaving = current.stream().filter(c -> !keep.contains(c.getId())).toList();
+            leaving.forEach(c -> c.setRoom(null));   // still enrolled, just without a room
+            childRepository.saveAll(leaving);
+            moveChildrenInto(room, wanted);
+        }
+        if (req.teacherIds() != null) {
+            Set<UUID> keepTeachers = new HashSet<>(req.teacherIds());
+            Set<UUID> now = new HashSet<>();
+            for (var a : teacherRoomRepository.findByRoomIdOrderByCreatedAtAsc(room.getId())) {
+                UUID t = a.getTeacher().getId();
+                now.add(t);
+                if (!keepTeachers.contains(t)) teacherAssignmentService.unassign(room.getId(), t);
+            }
+            for (UUID t : keepTeachers) {
+                if (!now.contains(t)) teacherAssignmentService.assign(room.getId(), t);
+            }
+        }
+        return toResponse(room);
     }
 
     /**
@@ -267,6 +320,56 @@ public class AdminRoomService {
             roomRepository.save(room);
         }
         return toResponse(room);
+    }
+
+    private static void checkAgeRange(Integer min, Integer max) {
+        if (min != null && max != null && min > max) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "The minimum age can't be higher than the maximum age");
+        }
+    }
+
+    private static boolean fitsAgeRange(Child c, Integer min, Integer max) {
+        if (c.getDob() == null || (min == null && max == null)) return true;
+        long months = Period.between(c.getDob(), LocalDate.now()).toTotalMonths();
+        return (min == null || months >= min) && (max == null || months <= max);
+    }
+
+    /** The requested children, checked: in this nursery, enrolled, within capacity and age range. */
+    private List<Child> loadChildrenForRoom(List<UUID> ids, Room room) {
+        UUID nurseryId = TenantContext.currentNurseryId();
+        List<Child> list = new java.util.ArrayList<>();
+        for (UUID id : new LinkedHashSet<>(ids)) {
+            Child c = childRepository.findById(id)
+                .filter(x -> x.getNursery() != null && nurseryId.equals(x.getNursery().getId()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Child not found"));
+            if (c.getEnrollmentStatus() != EnrollmentStatus.ENROLLED) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, c.getFullName() + " is not enrolled");
+            }
+            if (!fitsAgeRange(c, room.getAgeMinMonths(), room.getAgeMaxMonths())) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    c.getFullName() + " is outside this room's age range");
+            }
+            list.add(c);
+        }
+        if (list.size() > room.getCapacity()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Only " + room.getCapacity() + " children fit in this room");
+        }
+        return list;
+    }
+
+    /** Puts the children in the room (moving them from any other room) and updates the chats. */
+    private void moveChildrenInto(Room room, List<Child> kids) {
+        if (kids.isEmpty()) return;
+        Set<UUID> touched = new HashSet<>();
+        touched.add(room.getId());
+        for (Child c : kids) {
+            if (c.getRoom() != null) touched.add(c.getRoom().getId());
+            c.setRoom(room);
+        }
+        childRepository.saveAll(kids);
+        events.publishEvent(RoomMembershipChangedEvent.of(touched.toArray(UUID[]::new)));
     }
 
     private Room loadOwned(UUID id) {

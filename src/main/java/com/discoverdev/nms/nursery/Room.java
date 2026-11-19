@@ -60,6 +60,13 @@ public class Room {
     @Column(name = "image_url", length = 500)
     private String imageUrl;
 
+    /** Optional age range for the room's children, in months (Jira YC-85). */
+    @Column(name = "age_min_months")
+    private Integer ageMinMonths;
+
+    @Column(name = "age_max_months")
+    private Integer ageMaxMonths;
+
     @Column(name = "archived_at")
     private Instant archivedAt;
 
