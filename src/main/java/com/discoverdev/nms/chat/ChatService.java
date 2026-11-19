@@ -265,7 +265,9 @@ public class ChatService {
             }
         }
         boolean ooh = isOutOfHours(sender, nursery, Instant.now());
-        ChatMessage saved = messageRepository.save(ChatMessage.builder()
+        // saveAndFlush: @CreationTimestamp is only filled in when the insert is flushed, and the
+        // inbox order (YC-34/YC-60) reads the thread's lastMessageAt set from it just below.
+        ChatMessage saved = messageRepository.saveAndFlush(ChatMessage.builder()
             .thread(t)
             .sender(sender)
             .body(req.body())
