@@ -157,7 +157,14 @@ public class AdminStaffService {
         return u;
     }
 
+    // Field-injected so the constructor (also edited on other branches) stays untouched.
+    @org.springframework.beans.factory.annotation.Autowired
+    private MemberArchiveRepository memberArchives;
+
     private String statusOf(User teacher) {
+        if (memberArchives.existsById(teacher.getId())) {
+            return "ARCHIVED";   // Jira YC-117 / YC-118
+        }
         // Accepting an invite enables the account.
         if (teacher.isEnabled()) {
             return "ACTIVE";

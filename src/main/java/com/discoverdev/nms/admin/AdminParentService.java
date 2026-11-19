@@ -204,7 +204,14 @@ public class AdminParentService {
             p.getImageUrl(), statusOf(p), p.getCreatedAt(), children, p.getPhone());
     }
 
+    // Field-injected so the constructor (also edited on other branches) stays untouched.
+    @org.springframework.beans.factory.annotation.Autowired
+    private MemberArchiveRepository memberArchives;
+
     private String statusOf(User parent) {
+        if (memberArchives.existsById(parent.getId())) {
+            return "ARCHIVED";   // Jira YC-117 / YC-118
+        }
         if (parent.isEnabled()) {
             return "ACTIVE";
         }
